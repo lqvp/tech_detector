@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header id="header">
+    <div class="header-title">Tech Detector</div>
+    <div id="hostname" class="hostname"></div>
+  </header>
+  <main id="results">
+    <div id="loading" class="loading">解析中...</div>
+    <div id="no-results" class="no-results" hidden>検出された技術はありません</div>
+    <div class="columns">
+      <div class="col col-left">
+        <div id="tech-list"></div>
+        <div id="wp-section" class="info-section" hidden>
+          <div class="category-header"><span>WordPress</span></div>
+          <div id="wp-content"></div>
+        </div>
+        <div id="encryption-section" class="info-section" hidden>
+          <div class="category-header"><span>暗号化</span></div>
+          <div id="encryption-content"></div>
+        </div>
+        <div id="cert-section" class="info-section" hidden>
+          <div class="category-header"><span>証明書</span></div>
+          <div id="cert-content"></div>
+        </div>
+        <div id="email-auth-section" class="info-section" hidden>
+          <div class="category-header"><span>メール認証</span></div>
+          <div id="email-auth-content"></div>
+        </div>
+        <div id="dns-info-section" class="info-section" hidden>
+          <div class="category-header"><span>DNS 情報</span></div>
+          <div id="dns-info-content"></div>
+        </div>
+        <div id="public-files-section" class="info-section" hidden>
+          <div class="category-header"><span>公開情報</span></div>
+          <div id="public-files-content"></div>
+        </div>
+        <div id="page-diag-section" class="info-section" hidden>
+          <div class="category-header"><span>ページ診断</span></div>
+          <div id="page-diag-content"></div>
+        </div>
+      </div>
+      <div class="col col-right">
+        <div id="sec-headers-section" class="info-section" hidden>
+          <div class="category-header"><span>セキュリティヘッダー</span></div>
+          <div id="sec-headers-content"></div>
+        </div>
+        <div id="info-leak-section" class="info-section" hidden>
+          <div class="category-header"><span>情報漏洩</span></div>
+          <div id="info-leak-content"></div>
+        </div>
+        <div id="cookie-section" class="info-section" hidden>
+          <div class="category-header"><span>Cookie</span></div>
+          <div id="cookie-content"></div>
+        </div>
+        <div id="dns-sec-section" class="info-section" hidden>
+          <div class="category-header"><span>DNS セキュリティ</span></div>
+          <div id="dns-sec-content"></div>
+        </div>
+        <div id="vt-section" class="info-section" hidden>
+          <div class="category-header"><span>VirusTotal</span></div>
+          <div id="vt-content"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer id="footer">
+    <span id="total-count">検出: 0件</span>
+  </footer>
+  <script src="../lib/browser-polyfill.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

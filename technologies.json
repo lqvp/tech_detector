@@ -1,0 +1,505 @@
+{
+  "categories": {
+    "js-framework": "JS フレームワーク",
+    "js-library": "JS ライブラリ",
+    "css-framework": "CSS フレームワーク",
+    "cms": "CMS / EC",
+    "server": "Web サーバー",
+    "analytics": "アナリティクス",
+    "cdn": "CDN",
+    "font": "フォント",
+    "hosting": "ホスティング",
+    "build": "ビルドツール",
+    "security": "セキュリティ",
+    "os": "サーバー OS"
+  },
+  "technologies": [
+    {
+      "name": "React",
+      "category": "js-framework",
+      "icon": "react.svg",
+      "js": { "__REACT_DEVTOOLS_GLOBAL_HOOK__": "" },
+      "dom": "[data-reactroot], [data-reactid]",
+      "scripts": "react(?:\\.min|\\.production\\.min)?\\.js"
+    },
+    {
+      "name": "Vue.js",
+      "category": "js-framework",
+      "icon": "vue.svg",
+      "js": { "__VUE__": "", "Vue": "" },
+      "dom": "[data-v-], [v-cloak], #__nuxt",
+      "scripts": "vue(?:\\.min|\\.global(?:\\.prod)?|\\.runtime)?\\.js"
+    },
+    {
+      "name": "Angular",
+      "category": "js-framework",
+      "icon": "angular.svg",
+      "js": { "ng": "" },
+      "dom": "[ng-version], [ng-app], app-root",
+      "scripts": "(?:angular|zone)\\.(?:min\\.)?js"
+    },
+    {
+      "name": "Svelte",
+      "category": "js-framework",
+      "icon": "svelte.svg",
+      "js": { "__svelte": "" },
+      "dom": "[class*='svelte-']",
+      "html": "class=\"svelte-"
+    },
+    {
+      "name": "Next.js",
+      "category": "js-framework",
+      "icon": "nextjs.svg",
+      "js": { "__NEXT_DATA__": "" },
+      "dom": "#__next",
+      "meta": { "generator": "Next\\.js" },
+      "scripts": "_next/static"
+    },
+    {
+      "name": "Nuxt",
+      "category": "js-framework",
+      "icon": "nuxt.svg",
+      "js": { "__NUXT__": "", "$nuxt": "" },
+      "dom": "#__nuxt, #__layout",
+      "scripts": "_nuxt/"
+    },
+    {
+      "name": "Gatsby",
+      "category": "js-framework",
+      "icon": "gatsby.svg",
+      "js": { "___gatsby": "" },
+      "dom": "#___gatsby",
+      "meta": { "generator": "Gatsby" }
+    },
+    {
+      "name": "Remix",
+      "category": "js-framework",
+      "icon": "remix.svg",
+      "js": { "__remixContext": "" },
+      "dom": "[data-remix-run]",
+      "html": "__remixContext"
+    },
+    {
+      "name": "Ember.js",
+      "category": "js-framework",
+      "icon": "ember.svg",
+      "js": { "Ember": "" },
+      "dom": "[id^='ember']",
+      "scripts": "ember(?:\\.min)?\\.js"
+    },
+    {
+      "name": "Backbone.js",
+      "category": "js-framework",
+      "icon": "backbone.svg",
+      "js": { "Backbone": "" },
+      "scripts": "backbone(?:-min|\\.min)?\\.js"
+    },
+    {
+      "name": "Alpine.js",
+      "category": "js-framework",
+      "icon": "alpine.svg",
+      "js": { "Alpine": "" },
+      "dom": "[x-data], [x-bind], [x-on]",
+      "scripts": "alpine(?:\\.min)?\\.js"
+    },
+    {
+      "name": "htmx",
+      "category": "js-framework",
+      "icon": "htmx.svg",
+      "js": { "htmx": "" },
+      "dom": "[hx-get], [hx-post], [hx-swap]",
+      "scripts": "htmx(?:\\.min)?\\.js"
+    },
+    {
+      "name": "jQuery",
+      "category": "js-library",
+      "icon": "jquery.svg",
+      "js": { "jQuery": "version" },
+      "scripts": "jquery[.-]\\d.*\\.js"
+    },
+    {
+      "name": "Lodash",
+      "category": "js-library",
+      "icon": "lodash.svg",
+      "js": { "_": "VERSION" },
+      "scripts": "lodash(?:\\.min)?\\.js"
+    },
+    {
+      "name": "Axios",
+      "category": "js-library",
+      "icon": "axios.svg",
+      "js": { "axios": "" },
+      "scripts": "axios(?:\\.min)?\\.js"
+    },
+    {
+      "name": "Moment.js",
+      "category": "js-library",
+      "icon": "moment.svg",
+      "js": { "moment": "version" },
+      "scripts": "moment(?:\\.min|-with-locales\\.min)?\\.js"
+    },
+    {
+      "name": "Three.js",
+      "category": "js-library",
+      "icon": "threejs.svg",
+      "js": { "THREE": "REVISION" },
+      "scripts": "three(?:\\.min|\\.module)?\\.js"
+    },
+    {
+      "name": "D3.js",
+      "category": "js-library",
+      "icon": "d3.svg",
+      "js": { "d3": "version" },
+      "scripts": "d3(?:\\.min)?\\.(?:v\\d\\.)?js"
+    },
+    {
+      "name": "Tailwind CSS",
+      "category": "css-framework",
+      "icon": "tailwindcss.svg",
+      "html": "tailwindcss",
+      "dom": "[class*='tw-'], [class*='bg-gradient-to-']",
+      "scripts": "tailwind"
+    },
+    {
+      "name": "Bootstrap",
+      "category": "css-framework",
+      "icon": "bootstrap.svg",
+      "js": { "bootstrap": "" },
+      "dom": "[class*='col-md-'], [class*='col-lg-'], .navbar-toggler, .btn-primary",
+      "scripts": "bootstrap(?:\\.bundle)?(?:\\.min)?\\.js",
+      "html": "bootstrap(?:\\.min)?\\.css"
+    },
+    {
+      "name": "Bulma",
+      "category": "css-framework",
+      "icon": "bulma.svg",
+      "dom": ".bulma, .is-primary.button, .column.is-",
+      "html": "bulma(?:\\.min)?\\.css"
+    },
+    {
+      "name": "Foundation",
+      "category": "css-framework",
+      "icon": "foundation.svg",
+      "js": { "Foundation": "version" },
+      "dom": "[class*='cell '], .top-bar",
+      "scripts": "foundation(?:\\.min)?\\.js"
+    },
+    {
+      "name": "Materialize",
+      "category": "css-framework",
+      "icon": "materialize.svg",
+      "js": { "M": "toast" },
+      "dom": ".materialize-textarea, .sidenav",
+      "scripts": "materialize(?:\\.min)?\\.js",
+      "html": "materialize(?:\\.min)?\\.css"
+    },
+    {
+      "name": "WordPress",
+      "category": "cms",
+      "icon": "wordpress.svg",
+      "meta": { "generator": "WordPress\\s?([\\d.]+)?" },
+      "dom": "link[href*='wp-content'], link[href*='wp-includes']",
+      "scripts": "wp-(?:content|includes)",
+      "html": "wp-content|wp-includes",
+      "headers": { "x-powered-by": "WordPress", "link": "wp-json" }
+    },
+    {
+      "name": "Shopify",
+      "category": "cms",
+      "icon": "shopify.svg",
+      "js": { "Shopify": "" },
+      "meta": { "shopify-digital-wallet": "" },
+      "dom": "link[href*='cdn.shopify.com']",
+      "scripts": "cdn\\.shopify\\.com",
+      "headers": { "x-shopid": "", "x-shopify-stage": "" }
+    },
+    {
+      "name": "Wix",
+      "category": "cms",
+      "icon": "wix.svg",
+      "js": { "wixBiSession": "" },
+      "meta": { "generator": "Wix" },
+      "dom": "[id^='comp-'], meta[content*='wix.com']",
+      "scripts": "static\\.parastorage\\.com|static\\.wixstatic\\.com"
+    },
+    {
+      "name": "Squarespace",
+      "category": "cms",
+      "icon": "squarespace.svg",
+      "js": { "Static": "", "SQUARESPACE_CONTEXT": "" },
+      "meta": { "generator": "Squarespace" },
+      "dom": ".sqsp-",
+      "scripts": "static\\d?\\.squarespace\\.com"
+    },
+    {
+      "name": "Webflow",
+      "category": "cms",
+      "icon": "webflow.svg",
+      "meta": { "generator": "Webflow" },
+      "dom": ".w-nav, .w-slider, [class*='w-']",
+      "html": "webflow",
+      "scripts": "webflow\\..*\\.js"
+    },
+    {
+      "name": "Drupal",
+      "category": "cms",
+      "icon": "drupal.svg",
+      "js": { "Drupal": "" },
+      "meta": { "generator": "Drupal" },
+      "dom": "[class*='drupal-'], body.toolbar-fixed",
+      "scripts": "drupal\\.js|misc/drupal",
+      "headers": { "x-drupal-cache": "", "x-generator": "Drupal" }
+    },
+    {
+      "name": "Ghost",
+      "category": "cms",
+      "icon": "ghost.svg",
+      "meta": { "generator": "Ghost" },
+      "dom": "link[href*='ghost']",
+      "scripts": "ghost(?:\\.min)?\\.js",
+      "headers": { "x-ghost-cache-status": "" }
+    },
+    {
+      "name": "nginx",
+      "category": "server",
+      "icon": "nginx.svg",
+      "headers": { "server": "nginx" }
+    },
+    {
+      "name": "Apache",
+      "category": "server",
+      "icon": "apache.svg",
+      "headers": { "server": "Apache" }
+    },
+    {
+      "name": "IIS",
+      "category": "server",
+      "icon": "iis.svg",
+      "headers": { "server": "Microsoft-IIS" }
+    },
+    {
+      "name": "LiteSpeed",
+      "category": "server",
+      "icon": "litespeed.svg",
+      "headers": { "server": "LiteSpeed" }
+    },
+    {
+      "name": "Windows Server",
+      "category": "os",
+      "icon": "windows.svg",
+      "headers": { "server": "Microsoft-IIS|Microsoft-HTTPAPI", "x-powered-by": "ASP\\.NET" }
+    },
+    {
+      "name": "Ubuntu",
+      "category": "os",
+      "icon": "ubuntu.svg",
+      "headers": { "server": ".*Ubuntu" }
+    },
+    {
+      "name": "Debian",
+      "category": "os",
+      "icon": "debian.svg",
+      "headers": { "server": ".*Debian" }
+    },
+    {
+      "name": "CentOS",
+      "category": "os",
+      "icon": "centos.svg",
+      "headers": { "server": ".*CentOS" }
+    },
+    {
+      "name": "Red Hat",
+      "category": "os",
+      "icon": "redhat.svg",
+      "headers": { "server": ".*Red Hat" }
+    },
+    {
+      "name": "FreeBSD",
+      "category": "os",
+      "icon": "freebsd.svg",
+      "headers": { "server": ".*FreeBSD" }
+    },
+    {
+      "name": "Unix",
+      "category": "os",
+      "icon": "unix.svg",
+      "headers": { "server": ".*Unix" }
+    },
+    {
+      "name": "Google Analytics",
+      "category": "analytics",
+      "icon": "google-analytics.svg",
+      "js": { "ga": "", "gtag": "", "GoogleAnalyticsObject": "" },
+      "scripts": "google-analytics\\.com/(?:analytics|ga)\\.js|googletagmanager\\.com/gtag",
+      "html": "google-analytics\\.com|gtag\\("
+    },
+    {
+      "name": "Google Tag Manager",
+      "category": "analytics",
+      "icon": "gtm.svg",
+      "js": { "google_tag_manager": "" },
+      "scripts": "googletagmanager\\.com/gtm\\.js",
+      "html": "googletagmanager\\.com"
+    },
+    {
+      "name": "Facebook Pixel",
+      "category": "analytics",
+      "icon": "facebook.svg",
+      "js": { "fbq": "" },
+      "scripts": "connect\\.facebook\\.net/.*fbevents\\.js",
+      "html": "facebook\\.net|fbq\\("
+    },
+    {
+      "name": "Hotjar",
+      "category": "analytics",
+      "icon": "hotjar.svg",
+      "js": { "hj": "", "hjSiteSettings": "" },
+      "scripts": "static\\.hotjar\\.com",
+      "html": "hotjar\\.com"
+    },
+    {
+      "name": "Segment",
+      "category": "analytics",
+      "icon": "segment.svg",
+      "js": { "analytics": "" },
+      "scripts": "cdn\\.segment\\.com|cdn\\.segment\\.io",
+      "html": "segment\\.com/analytics"
+    },
+    {
+      "name": "Mixpanel",
+      "category": "analytics",
+      "icon": "mixpanel.svg",
+      "js": { "mixpanel": "" },
+      "scripts": "cdn\\.mxpnl\\.com|api\\.mixpanel\\.com",
+      "html": "mixpanel"
+    },
+    {
+      "name": "Cloudflare",
+      "category": "cdn",
+      "icon": "cloudflare.svg",
+      "headers": { "cf-ray": "", "server": "cloudflare", "cf-cache-status": "" },
+      "scripts": "cdnjs\\.cloudflare\\.com"
+    },
+    {
+      "name": "Fastly",
+      "category": "cdn",
+      "icon": "fastly.svg",
+      "headers": { "x-served-by": "cache-", "via": "varnish", "x-fastly-request-id": "" }
+    },
+    {
+      "name": "CloudFront",
+      "category": "cdn",
+      "icon": "cloudfront.svg",
+      "headers": { "x-amz-cf-id": "", "x-amz-cf-pop": "", "via": "CloudFront" }
+    },
+    {
+      "name": "Akamai",
+      "category": "cdn",
+      "icon": "akamai.svg",
+      "headers": { "x-akamai-transformed": "", "server": "AkamaiGHost" },
+      "scripts": "akamaized\\.net|akam\\.net"
+    },
+    {
+      "name": "jsDelivr",
+      "category": "cdn",
+      "icon": "jsdelivr.svg",
+      "scripts": "cdn\\.jsdelivr\\.net",
+      "html": "cdn\\.jsdelivr\\.net"
+    },
+    {
+      "name": "Google Fonts",
+      "category": "font",
+      "icon": "google-fonts.svg",
+      "dom": "link[href*='fonts.googleapis.com'], link[href*='fonts.gstatic.com']",
+      "html": "fonts\\.googleapis\\.com|fonts\\.gstatic\\.com"
+    },
+    {
+      "name": "Adobe Fonts",
+      "category": "font",
+      "icon": "adobe-fonts.svg",
+      "dom": "link[href*='use.typekit.net']",
+      "scripts": "use\\.typekit\\.net",
+      "html": "use\\.typekit\\.net"
+    },
+    {
+      "name": "Font Awesome",
+      "category": "font",
+      "icon": "fontawesome.svg",
+      "dom": "link[href*='font-awesome'], link[href*='fontawesome'], .fa, .fas, .fab, .far",
+      "scripts": "fontawesome|font-awesome",
+      "html": "font-awesome|fontawesome"
+    },
+    {
+      "name": "Vercel",
+      "category": "hosting",
+      "icon": "vercel.svg",
+      "headers": { "x-vercel-id": "", "server": "Vercel", "x-vercel-cache": "" }
+    },
+    {
+      "name": "Netlify",
+      "category": "hosting",
+      "icon": "netlify.svg",
+      "headers": { "x-nf-request-id": "", "server": "Netlify" },
+      "dom": "link[href*='.netlify.']",
+      "html": "netlify"
+    },
+    {
+      "name": "Heroku",
+      "category": "hosting",
+      "icon": "heroku.svg",
+      "headers": { "via": "heroku", "server": "heroku" }
+    },
+    {
+      "name": "GitHub Pages",
+      "category": "hosting",
+      "icon": "github.svg",
+      "headers": { "server": "GitHub.com", "x-github-request-id": "" }
+    },
+    {
+      "name": "Webpack",
+      "category": "build",
+      "icon": "webpack.svg",
+      "js": { "webpackJsonp": "", "webpackChunk": "" },
+      "scripts": "bundle\\.js|vendors~|chunk\\.",
+      "html": "webpackJsonp|webpackChunk|__webpack_require__"
+    },
+    {
+      "name": "Vite",
+      "category": "build",
+      "icon": "vite.svg",
+      "dom": "script[type='module'][src*='/@vite'], script[type='module'][src*='vite']",
+      "scripts": "@vite|vite/",
+      "html": "/@vite|vite\\.svg"
+    },
+    {
+      "name": "Parcel",
+      "category": "build",
+      "icon": "parcel.svg",
+      "scripts": "parcel",
+      "html": "__parcel"
+    },
+    {
+      "name": "reCAPTCHA",
+      "category": "security",
+      "icon": "recaptcha.svg",
+      "js": { "grecaptcha": "" },
+      "dom": ".g-recaptcha",
+      "scripts": "google\\.com/recaptcha|gstatic\\.com/recaptcha"
+    },
+    {
+      "name": "hCaptcha",
+      "category": "security",
+      "icon": "hcaptcha.svg",
+      "js": { "hcaptcha": "" },
+      "dom": ".h-captcha",
+      "scripts": "hcaptcha\\.com/1/api\\.js"
+    },
+    {
+      "name": "Service Worker",
+      "category": "security",
+      "icon": "pwa.svg",
+      "js": { "__sw": "" },
+      "html": "serviceWorker\\.register|navigator\\.serviceWorker"
+    }
+  ]
+}
