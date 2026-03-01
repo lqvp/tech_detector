@@ -26,8 +26,8 @@
       script.src = (typeof browser !== 'undefined' ? browser : chrome).runtime.getURL('content-main.js');
       (document.head || document.documentElement).appendChild(script);
       script.onload = () => script.remove();
-    } catch {
-      // If injection fails, proceed without JS globals
+    } catch (err) {
+      console.warn('[Tech Detector] Script injection failed:', err.message);
       jsGlobals = {};
       runDetection();
     }
@@ -39,8 +39,8 @@
       const url = (typeof browser !== 'undefined' ? browser : chrome).runtime.getURL('technologies.json');
       const resp = await fetch(url);
       technologies = await resp.json();
-    } catch (e) {
-      console.error('Tech Detector: Failed to load technologies.json', e);
+    } catch (err) {
+      console.error('[Tech Detector] Failed to load technologies.json:', err.message);
     }
   }
 
@@ -73,7 +73,6 @@
 
   function runDetection() {
     if (detectionSent || !technologies) return;
-    // Wait for JS globals if not yet received (with timeout)
     if (jsGlobals === null) return;
 
     detectionSent = true;
@@ -97,8 +96,8 @@
       type: 'DETECTION_RESULT',
       detections: merged,
       url: window.location.href
-    }).catch(() => {
-      // Background may not be ready, ignore
+    }).catch((err) => {
+      console.warn('[Tech Detector] Failed to send detection results:', err.message);
     });
   }
 
@@ -114,7 +113,6 @@
       }
     }, 2000);
 
-    // If jsGlobals already arrived (race condition), run now
     if (jsGlobals !== null) {
       runDetection();
     }

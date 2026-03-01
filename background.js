@@ -1,20 +1,34 @@
 /**
  * background.js — Service Worker for Tech Detector.
- * Handles: on-demand detection (triggered by popup click), header detection
- * via fetch, programmatic content script injection, badge updates.
+ * Handles: on-demand detection, header detection, content script injection,
+ * badge updates, persistent caching, auto-detection, and history.
  */
 (() => {
   'use strict';
 
   const api = typeof browser !== 'undefined' ? browser : chrome;
 
-  // In-memory detection store: tabId -> { url, detections[] }
+  // ─── Constants ───
+  const MessageTypes = {
+    RUN_DETECTION: 'RUN_DETECTION',
+    DETECTION_RESULT: 'DETECTION_RESULT',
+    GET_DETECTIONS: 'GET_DETECTIONS',
+    CLEAR_CACHE: 'CLEAR_CACHE'
+  };
+
+  const CACHE_KEY_PREFIX = 'detection_cache_';
+  const HISTORY_KEY = 'detection_history';
+  const MAX_HISTORY = 50;
+  const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+  // In-memory detection store: tabId -> { url, detections[], timestamp }
   const tabDetections = {};
 
   // Pending detection promises: tabId -> { resolve, timer }
   const pendingDetections = new Map();
 
-  // Load technologies.json
+  // ─── Technology Loading ───
+
   let technologies = null;
   async function loadTechnologies() {
     try {
@@ -22,13 +36,91 @@
       const resp = await fetch(url);
       technologies = await resp.json();
     } catch (e) {
-      console.error('Tech Detector: Failed to load technologies.json', e);
+      console.error('[Tech Detector] Failed to load technologies.json:', e.message);
     }
   }
 
-  /**
-   * Detect technologies from response headers.
-   */
+  // ─── Cache Management ───
+
+  async function saveToStorage(tabId, data) {
+    try {
+      const key = `${CACHE_KEY_PREFIX}${tabId}`;
+      await api.storage.local.set({
+        [key]: { ...data, timestamp: Date.now() }
+      });
+    } catch (e) {
+      console.warn('[Tech Detector] Failed to save to storage:', e.message);
+    }
+  }
+
+  async function loadFromStorage(tabId) {
+    try {
+      const key = `${CACHE_KEY_PREFIX}${tabId}`;
+      const result = await api.storage.local.get(key);
+      const cached = result[key];
+      
+      if (cached && (Date.now() - cached.timestamp) < CACHE_EXPIRY) {
+        return cached;
+      }
+      return null;
+    } catch (e) {
+      console.warn('[Tech Detector] Failed to load from storage:', e.message);
+      return null;
+    }
+  }
+
+  async function clearExpiredCache() {
+    try {
+      const allData = await api.storage.local.get();
+      const keysToRemove = [];
+      
+      for (const [key, value] of Object.entries(allData)) {
+        if (key.startsWith(CACHE_KEY_PREFIX)) {
+          if (!value.timestamp || (Date.now() - value.timestamp) >= CACHE_EXPIRY) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+      
+      if (keysToRemove.length > 0) {
+        await api.storage.local.remove(keysToRemove);
+        console.log(`[Tech Detector] Cleared ${keysToRemove.length} expired cache entries`);
+      }
+    } catch (e) {
+      console.warn('[Tech Detector] Failed to clear expired cache:', e.message);
+    }
+  }
+
+  // ─── History Management ───
+
+  async function addToHistory(data) {
+    try {
+      const result = await api.storage.local.get(HISTORY_KEY);
+      const history = result[HISTORY_KEY] || [];
+      
+      // Avoid duplicates (same URL within last hour)
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const filtered = history.filter(h => 
+        !(h.url === data.url && h.timestamp > oneHourAgo)
+      );
+      
+      filtered.unshift({
+        url: data.url,
+        hostname: new URL(data.url).hostname,
+        detectionCount: data.detections.length,
+        timestamp: Date.now()
+      });
+      
+      await api.storage.local.set({
+        [HISTORY_KEY]: filtered.slice(0, MAX_HISTORY)
+      });
+    } catch (e) {
+      console.warn('[Tech Detector] Failed to add to history:', e.message);
+    }
+  }
+
+  // ─── Detection Functions ───
+
   function detectFromHeaders(techs, headers) {
     const results = [];
     for (const tech of techs) {
@@ -57,17 +149,14 @@
             });
             break;
           }
-        } catch {
-          // invalid regex
+        } catch (e) {
+          console.warn('[Tech Detector] Invalid regex pattern:', pattern, e.message);
         }
       }
     }
     return results;
   }
 
-  /**
-   * Merge new detections into existing ones for a tab.
-   */
   function mergeDetections(existing, incoming) {
     const map = new Map();
     for (const d of existing) {
@@ -92,9 +181,6 @@
     return Array.from(map.values());
   }
 
-  /**
-   * Update the extension badge for a tab.
-   */
   function updateBadge(tabId) {
     const data = tabDetections[tabId];
     const count = data ? data.detections.length : 0;
@@ -103,18 +189,25 @@
     api.action.setBadgeBackgroundColor({ color: '#4A90D9', tabId });
   }
 
-  /**
-   * Run full detection for a tab (headers via fetch + content script injection).
-   */
-  async function runDetection(tabId, tabUrl) {
+  async function runDetection(tabId, tabUrl, skipCache = false) {
     // Cancel any pending detection for this tab
     if (pendingDetections.has(tabId)) {
       clearTimeout(pendingDetections.get(tabId).timer);
       pendingDetections.delete(tabId);
     }
 
+    // Check cache first (unless skipped)
+    if (!skipCache) {
+      const cached = await loadFromStorage(tabId);
+      if (cached && cached.url === tabUrl) {
+        tabDetections[tabId] = cached;
+        updateBadge(tabId);
+        return cached;
+      }
+    }
+
     // Reset detections
-    tabDetections[tabId] = { url: tabUrl, detections: [] };
+    tabDetections[tabId] = { url: tabUrl, detections: [], timestamp: Date.now() };
 
     if (!technologies) await loadTechnologies();
     if (!technologies) return tabDetections[tabId];
@@ -133,8 +226,8 @@
           headerResults
         );
       }
-    } catch {
-      // Fetch may fail for chrome://, file://, etc.
+    } catch (e) {
+      console.warn('[Tech Detector] Header fetch failed:', e.message);
     }
 
     // 2. Inject content scripts programmatically
@@ -148,8 +241,8 @@
         files: ['content-main.js'],
         world: 'MAIN'
       });
-    } catch {
-      // May fail on restricted pages (chrome://, about://, etc.)
+    } catch (e) {
+      console.warn('[Tech Detector] Content script injection failed:', e.message);
       updateBadge(tabId);
       return tabDetections[tabId];
     }
@@ -159,6 +252,9 @@
       const timer = setTimeout(() => {
         pendingDetections.delete(tabId);
         updateBadge(tabId);
+        // Save to storage and history
+        saveToStorage(tabId, tabDetections[tabId]);
+        addToHistory(tabDetections[tabId]);
         resolve(tabDetections[tabId]);
       }, 3000);
 
@@ -166,15 +262,42 @@
     });
   }
 
-  // Listen for messages
+  // ─── Auto Detection ───
+
+  async function shouldAutoDetect() {
+    try {
+      const result = await api.storage.sync.get('autoDetect');
+      return result.autoDetect === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function handleTabUpdate(tabId, changeInfo, tab) {
+    if (changeInfo.status === 'complete' && tab.url?.startsWith('http')) {
+      const autoDetect = await shouldAutoDetect();
+      if (autoDetect) {
+        // Small delay to let page stabilize
+        setTimeout(() => {
+          runDetection(tabId, tab.url).catch(e => 
+            console.warn('[Tech Detector] Auto-detection failed:', e.message)
+          );
+        }, 1000);
+      }
+    }
+  }
+
+  // ─── Message Handling ───
+
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Content script detection results
-    if (message.type === 'DETECTION_RESULT' && sender.tab) {
+    if (message.type === MessageTypes.DETECTION_RESULT && sender.tab) {
       const tabId = sender.tab.id;
       if (!tabDetections[tabId]) {
         tabDetections[tabId] = {
           url: message.url || sender.tab.url,
-          detections: []
+          detections: [],
+          timestamp: Date.now()
         };
       }
       tabDetections[tabId].detections = mergeDetections(
@@ -182,11 +305,13 @@
         message.detections || []
       );
 
-      // Resolve pending detection if any
       if (pendingDetections.has(tabId)) {
         const pending = pendingDetections.get(tabId);
         clearTimeout(pending.timer);
         updateBadge(tabId);
+        // Save to storage and history
+        saveToStorage(tabId, tabDetections[tabId]);
+        addToHistory(tabDetections[tabId]);
         pending.resolve(tabDetections[tabId]);
         pendingDetections.delete(tabId);
       }
@@ -195,35 +320,54 @@
     }
 
     // Run detection (triggered by popup click)
-    if (message.type === 'RUN_DETECTION') {
-      runDetection(message.tabId, message.url).then((result) => {
-        sendResponse(result);
-      }).catch(() => {
-        sendResponse({ url: message.url || '', detections: [] });
-      });
+    if (message.type === MessageTypes.RUN_DETECTION) {
+      runDetection(message.tabId, message.url, message.skipCache)
+        .then((result) => sendResponse(result))
+        .catch((e) => {
+          console.error('[Tech Detector] Detection failed:', e.message);
+          sendResponse({ url: message.url || '', detections: [] });
+        });
       return true; // async sendResponse
     }
 
     // Get cached detections
-    if (message.type === 'GET_DETECTIONS') {
-      const data = tabDetections[message.tabId] || { url: '', detections: [] };
-      sendResponse(data);
+    if (message.type === MessageTypes.GET_DETECTIONS) {
+      const data = tabDetections[message.tabId];
+      if (data) {
+        sendResponse(data);
+      } else {
+        // Try loading from storage
+        loadFromStorage(message.tabId).then(cached => {
+          sendResponse(cached || { url: '', detections: [] });
+        });
+        return true;
+      }
       return false;
+    }
+
+    // Clear cache
+    if (message.type === MessageTypes.CLEAR_CACHE) {
+      clearExpiredCache().then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
     }
 
     return false;
   });
 
+  // ─── Event Listeners ───
+
   // Open popup window centered on screen
   api.action.onClicked.addListener(async (tab) => {
-    const width = 750;
-    const height = 900;
+    const width = 420;
+    const height = 580;
     const currentWindow = await api.windows.getCurrent();
     const left = Math.round(currentWindow.left + (currentWindow.width - width) / 2);
     const top = Math.round(currentWindow.top + (currentWindow.height - height) / 2);
     const params = new URLSearchParams({ tabId: tab.id, tabUrl: tab.url });
     api.windows.create({
-      url: `${api.runtime.getURL('popup/popup.html')}?${params}`,
+      url: `${api.runtime.getURL('popup.html')}?${params}`,
       type: 'popup',
       width,
       height,
@@ -232,6 +376,9 @@
     });
   });
 
+  // Auto-detection on tab update
+  api.tabs.onUpdated.addListener(handleTabUpdate);
+
   // Clean up when tabs are closed
   api.tabs.onRemoved.addListener((tabId) => {
     delete tabDetections[tabId];
@@ -239,7 +386,20 @@
       clearTimeout(pendingDetections.get(tabId).timer);
       pendingDetections.delete(tabId);
     }
+    // Clean up storage
+    api.storage.local.remove(`${CACHE_KEY_PREFIX}${tabId}`);
   });
+
+  // Periodic cache cleanup
+  api.alarms?.create('cacheCleanup', { periodInMinutes: 60 });
+  api.alarms?.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'cacheCleanup') {
+      clearExpiredCache();
+    }
+  });
+
+  // Manual cleanup on startup
+  clearExpiredCache();
 
   // Initialize
   loadTechnologies();

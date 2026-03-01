@@ -80,8 +80,8 @@
           }
           results[varName] = entry;
         }
-      } catch {
-        // Access denied or error, skip
+      } catch (err) {
+        // Access denied or error, skip silently
       }
     }
     return results;
@@ -89,10 +89,14 @@
 
   // Small delay to let frameworks initialize
   setTimeout(() => {
-    const globals = probeGlobals();
-    window.postMessage({
-      type: 'TECH_DETECTOR_JS_PROBE',
-      globals
-    }, '*');
+    try {
+      const globals = probeGlobals();
+      window.postMessage({
+        type: 'TECH_DETECTOR_JS_PROBE',
+        globals
+      }, '*');
+    } catch (err) {
+      console.error('[Tech Detector] Failed to probe globals:', err.message);
+    }
   }, 500);
 })();

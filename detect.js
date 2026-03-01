@@ -14,7 +14,8 @@ var TechDetector = (() => {
     try {
       const re = new RegExp(pattern, 'i');
       return re.exec(value);
-    } catch {
+    } catch (err) {
+      console.warn('[Tech Detector] Invalid regex pattern:', pattern, err.message);
       return null;
     }
   }
@@ -56,8 +57,8 @@ var TechDetector = (() => {
             results.push({ name: tech.name, category: tech.category, method: 'dom' });
             break;
           }
-        } catch {
-          // invalid selector, skip
+        } catch (err) {
+          console.warn('[Tech Detector] Invalid selector:', sel, err.message);
         }
       }
     }
@@ -123,13 +124,11 @@ var TechDetector = (() => {
     if (!headers) return results;
     for (const tech of techs) {
       if (!tech.headers) continue;
-      let matched = false;
       for (const [headerName, pattern] of Object.entries(tech.headers)) {
         const value = headers[headerName.toLowerCase()];
         if (value === undefined) continue;
         if (!pattern) {
           results.push({ name: tech.name, category: tech.category, method: 'headers' });
-          matched = true;
           break;
         }
         const match = testPattern(pattern, value);
@@ -137,7 +136,6 @@ var TechDetector = (() => {
           const entry = { name: tech.name, category: tech.category, method: 'headers' };
           if (match[1]) entry.version = match[1];
           results.push(entry);
-          matched = true;
           break;
         }
       }

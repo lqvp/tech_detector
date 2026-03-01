@@ -5,7 +5,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 360px;
+      width: 400px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
       color: #333;
@@ -17,6 +17,22 @@
       font-weight: 700;
       color: #1a1a2e;
       margin-bottom: 16px;
+    }
+    .section {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+    .section:last-child {
+      border-bottom: none;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .field {
       margin-bottom: 12px;
@@ -64,6 +80,13 @@
       margin-top: 8px;
     }
     .btn-save:hover { background: #3a7bc8; }
+    .btn-clear {
+      background: #e74c3c;
+      color: #fff;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .btn-clear:hover { background: #c0392b; }
     .status {
       margin-top: 8px;
       font-size: 12px;
@@ -82,23 +105,139 @@
       text-decoration: none;
     }
     .hint a:hover { text-decoration: underline; }
+    /* Toggle Switch */
+    .toggle-field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .toggle-label {
+      margin-bottom: 0;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .toggle-slider {
+      background-color: #4A90D9;
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+    /* History List */
+    .history-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+    .history-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .history-hostname {
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    .history-meta {
+      color: #999;
+      margin-top: 2px;
+    }
+    .empty-history {
+      padding: 16px;
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
   <h1>Tech Detector 設定</h1>
-  <div class="field">
-    <label for="apikey">VirusTotal API キー</label>
-    <div class="input-wrap">
-      <input type="password" id="apikey" placeholder="APIキーを入力">
-      <button class="btn btn-toggle" id="toggle-btn" type="button">表示</button>
+
+  <!-- VirusTotal API Key -->
+  <div class="section">
+    <div class="section-title">VirusTotal 連携</div>
+    <div class="field">
+      <label for="apikey">API キー</label>
+      <div class="input-wrap">
+        <input type="password" id="apikey" placeholder="APIキーを入力">
+        <button class="btn btn-toggle" id="toggle-btn" type="button">表示</button>
+      </div>
+    </div>
+    <button class="btn btn-save" id="save-api-btn" type="button">保存</button>
+    <div class="status" id="api-status"></div>
+    <div class="hint">
+      APIキーは <a href="https://www.virustotal.com/gui/join" target="_blank" rel="noopener">VirusTotal</a>
+      に無料登録して取得できます。
     </div>
   </div>
-  <button class="btn btn-save" id="save-btn" type="button">保存</button>
-  <div class="status" id="status"></div>
-  <div class="hint">
-    APIキーは <a href="https://www.virustotal.com/gui/join" target="_blank" rel="noopener">VirusTotal</a>
-    に無料登録して取得できます。
+
+  <!-- Auto Detection -->
+  <div class="section">
+    <div class="section-title">自動検出</div>
+    <div class="toggle-field">
+      <label class="toggle-label" for="auto-detect">ページ読み込み時に自動で検出</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="auto-detect">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="hint">
+      有効にすると、各ページ読み込み完了時に自動的に技術検出を実行します。
+    </div>
+    <div class="status" id="auto-detect-status"></div>
   </div>
+
+  <!-- History -->
+  <div class="section">
+    <div class="section-title">検出履歴（最新50件）</div>
+    <div class="history-list" id="history-list">
+      <div class="empty-history">履歴がありません</div>
+    </div>
+    <button class="btn btn-clear" id="clear-history-btn" type="button">履歴をクリア</button>
+  </div>
+
+  <!-- Cache Management -->
+  <div class="section">
+    <div class="section-title">キャッシュ管理</div>
+    <button class="btn btn-clear" id="clear-cache-btn" type="button">期限切れキャッシュを削除</button>
+    <div class="status" id="cache-status"></div>
+  </div>
+
   <script src="browser-polyfill.js"></script>
   <script src="options.js"></script>
 </body>

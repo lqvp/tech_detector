@@ -1,77 +1,217 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Detector</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header id="header">
-    <div class="header-title">Tech Detector</div>
-    <div id="hostname" class="hostname"></div>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="logo">
+        <span class="logo-icon">🔍</span>
+        <span class="logo-text">Tech Detector</span>
+      </div>
+      <div class="header-actions">
+        <button id="export-btn" class="icon-btn" title="エクスポート">📥</button>
+        <button id="settings-btn" class="icon-btn" title="設定">⚙️</button>
+      </div>
+    </div>
+    <div class="site-info">
+      <div id="hostname" class="hostname">読み込み中...</div>
+      <div id="tech-count" class="tech-count"></div>
+    </div>
   </header>
-  <main id="results">
-    <div id="loading" class="loading">解析中...</div>
-    <div id="no-results" class="no-results" hidden>検出された技術はありません</div>
-    <div class="columns">
-      <div class="col col-left">
-        <div id="tech-list"></div>
-        <div id="wp-section" class="info-section" hidden>
-          <div class="category-header"><span>WordPress</span></div>
-          <div id="wp-content"></div>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="overview">概要</button>
+    <button class="tab-btn" data-tab="tech">技術</button>
+    <button class="tab-btn" data-tab="security">セキュリティ</button>
+    <button class="tab-btn" data-tab="details">詳細</button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Loading State -->
+    <div id="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>解析中...</p>
+    </div>
+
+    <!-- Overview Tab -->
+    <div id="tab-overview" class="tab-content active">
+      <!-- Security Score Card -->
+      <div class="score-card">
+        <div class="score-header">
+          <span class="score-title">セキュリティスコア</span>
+          <span id="security-score" class="score-value">-</span>
         </div>
-        <div id="encryption-section" class="info-section" hidden>
-          <div class="category-header"><span>暗号化</span></div>
-          <div id="encryption-content"></div>
+        <div class="score-bar">
+          <div id="score-progress" class="score-progress"></div>
         </div>
-        <div id="cert-section" class="info-section" hidden>
-          <div class="category-header"><span>証明書</span></div>
-          <div id="cert-content"></div>
+        <div id="score-issues" class="score-issues"></div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="quick-stats">
+        <div class="stat-item">
+          <span id="stat-frameworks" class="stat-value">-</span>
+          <span class="stat-label">フレームワーク</span>
         </div>
-        <div id="email-auth-section" class="info-section" hidden>
-          <div class="category-header"><span>メール認証</span></div>
-          <div id="email-auth-content"></div>
+        <div class="stat-item">
+          <span id="stat-cms" class="stat-value">-</span>
+          <span class="stat-label">CMS</span>
         </div>
-        <div id="dns-info-section" class="info-section" hidden>
-          <div class="category-header"><span>DNS 情報</span></div>
-          <div id="dns-info-content"></div>
+        <div class="stat-item">
+          <span id="stat-analytics" class="stat-value">-</span>
+          <span class="stat-label">アナリティクス</span>
         </div>
-        <div id="public-files-section" class="info-section" hidden>
-          <div class="category-header"><span>公開情報</span></div>
-          <div id="public-files-content"></div>
-        </div>
-        <div id="page-diag-section" class="info-section" hidden>
-          <div class="category-header"><span>ページ診断</span></div>
-          <div id="page-diag-content"></div>
+        <div class="stat-item">
+          <span id="stat-security" class="stat-value">-</span>
+          <span class="stat-label">セキュリティ</span>
         </div>
       </div>
-      <div class="col col-right">
-        <div id="sec-headers-section" class="info-section" hidden>
-          <div class="category-header"><span>セキュリティヘッダー</span></div>
-          <div id="sec-headers-content"></div>
+
+      <!-- Highlights -->
+      <div class="card">
+        <h3 class="section-title">検出された技術</h3>
+        <div id="tech-highlights" class="tech-chips">
+          <span class="empty-text">検出中...</span>
         </div>
-        <div id="info-leak-section" class="info-section" hidden>
-          <div class="category-header"><span>情報漏洩</span></div>
-          <div id="info-leak-content"></div>
-        </div>
-        <div id="cookie-section" class="info-section" hidden>
-          <div class="category-header"><span>Cookie</span></div>
-          <div id="cookie-content"></div>
-        </div>
-        <div id="dns-sec-section" class="info-section" hidden>
-          <div class="category-header"><span>DNS セキュリティ</span></div>
-          <div id="dns-sec-content"></div>
-        </div>
-        <div id="vt-section" class="info-section" hidden>
-          <div class="category-header"><span>VirusTotal</span></div>
-          <div id="vt-content"></div>
+      </div>
+
+      <!-- TLS Status -->
+      <div class="card">
+        <h3 class="section-title">TLS / HTTPS</h3>
+        <div class="summary-list">
+          <div class="summary-item">
+            <span class="summary-label">プロトコル</span>
+            <span id="tls-protocol" class="summary-value">-</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">TLSバージョン</span>
+            <span id="tls-version" class="summary-value">-</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">グレード</span>
+            <span id="tls-grade" class="summary-value">-</span>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- Technologies Tab -->
+    <div id="tab-tech" class="tab-content">
+      <!-- Search -->
+      <div class="search-box">
+        <input type="text" id="tech-search" placeholder="技術を検索..." autocomplete="off">
+        <button id="clear-search" class="clear-btn" hidden>✕</button>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="category-filter" id="category-filter">
+        <button class="filter-btn active" data-filter="all">すべて</button>
+        <button class="filter-btn" data-filter="js-framework">フレームワーク</button>
+        <button class="filter-btn" data-filter="cms">CMS</button>
+        <button class="filter-btn" data-filter="analytics">分析</button>
+      </div>
+
+      <!-- Tech List -->
+      <div id="tech-list" class="tech-list">
+        <div class="empty-state">
+          <p>検出された技術はありません</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security Tab -->
+    <div id="tab-security" class="tab-content">
+      <!-- Security Headers -->
+      <div class="card">
+        <h3 class="section-title">
+          セキュリティヘッダー
+          <span id="headers-score" class="badge"></span>
+        </h3>
+        <div id="headers-list" class="check-list"></div>
+      </div>
+
+      <!-- Cookie Security -->
+      <div class="card">
+        <h3 class="section-title">Cookie セキュリティ</h3>
+        <div id="cookie-summary" class="summary-list"></div>
+      </div>
+
+      <!-- Page Security -->
+      <div class="card">
+        <h3 class="section-title">ページ診断</h3>
+        <div id="page-security-list" class="check-list"></div>
+      </div>
+    </div>
+
+    <!-- Details Tab -->
+    <div id="tab-details" class="tab-content">
+      <!-- DNS Info -->
+      <div class="card">
+        <h3 class="section-title">DNS情報</h3>
+        <div id="dns-details" class="detail-list"></div>
+      </div>
+
+      <!-- Certificate -->
+      <div class="card">
+        <h3 class="section-title">証明書</h3>
+        <div id="cert-details" class="detail-list"></div>
+      </div>
+
+      <!-- Email Auth -->
+      <div class="card">
+        <h3 class="section-title">メール認証</h3>
+        <div id="email-auth-details" class="check-list"></div>
+      </div>
+
+      <!-- VirusTotal -->
+      <div class="card">
+        <h3 class="section-title">
+          VirusTotal
+          <span id="vt-badge" class="badge"></span>
+        </h3>
+        <div id="vt-details" class="detail-list"></div>
+      </div>
+    </div>
   </main>
-  <footer id="footer">
-    <span id="total-count">検出: 0件</span>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span id="last-updated">最終更新: -</span>
+    <button id="refresh-btn" class="refresh-btn">🔄 更新</button>
   </footer>
-  <script src="../browser-polyfill.js"></script>
+
+  <!-- Export Modal -->
+  <div id="export-modal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>エクスポート</h3>
+        <button class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>検出結果をエクスポートします</p>
+        <div class="export-options">
+          <button id="export-json" class="export-btn">
+            <span class="export-icon">📄</span>
+            <span>JSON</span>
+          </button>
+          <button id="export-csv" class="export-btn">
+            <span class="export-icon">📊</span>
+            <span>CSV</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="browser-polyfill.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
