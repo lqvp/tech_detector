@@ -1,5 +1,5 @@
 /**
- * content.js — Content script for Tech Detector.
+ * content.js — Content script for Tech Detector_Enhanced.
  * Runs in ISOLATED world. Performs DOM, meta, scripts, and HTML detection.
  * Receives JS globals from content-main.js via postMessage.
  */
@@ -27,7 +27,7 @@
       (document.head || document.documentElement).appendChild(script);
       script.onload = () => script.remove();
     } catch (err) {
-      console.warn('[Tech Detector] Script injection failed:', err.message);
+      console.warn('[Tech Detector_Enhanced] Script injection failed:', err.message);
       jsGlobals = {};
       runDetection();
     }
@@ -40,7 +40,7 @@
       const resp = await fetch(url);
       technologies = await resp.json();
     } catch (err) {
-      console.error('[Tech Detector] Failed to load technologies.json:', err.message);
+      console.error('[Tech Detector_Enhanced] Failed to load technologies.json:', err.message);
     }
   }
 
@@ -97,7 +97,7 @@
       detections: merged,
       url: window.location.href
     }).catch((err) => {
-      console.warn('[Tech Detector] Failed to send detection results:', err.message);
+      console.warn('[Tech Detector_Enhanced] Failed to send detection results:', err.message);
     });
   }
 

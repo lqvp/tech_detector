@@ -1,189 +1,331 @@
 /**
- * options.js — Tech Detector settings management.
- * Handles: VirusTotal API key, auto-detection toggle, history display, cache management.
+ * Tech Detector Enhanced - Options Page
+ * 整理版: シンプルで確実なデータフロー
  */
 (() => {
   'use strict';
-
   const api = typeof browser !== 'undefined' ? browser : chrome;
 
-  // DOM Elements
-  const keyInput = document.getElementById('apikey');
-  const toggleBtn = document.getElementById('toggle-btn');
-  const saveApiBtn = document.getElementById('save-api-btn');
-  const apiStatusEl = document.getElementById('api-status');
-  const autoDetectCheckbox = document.getElementById('auto-detect');
-  const autoDetectStatusEl = document.getElementById('auto-detect-status');
-  const historyListEl = document.getElementById('history-list');
-  const clearHistoryBtn = document.getElementById('clear-history-btn');
-  const clearCacheBtn = document.getElementById('clear-cache-btn');
-  const cacheStatusEl = document.getElementById('cache-status');
+  // === 状態管理 ===
+  let historyData = [];
 
-  // ─── API Key Management ───
+  // === DOM ヘルパー ===
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+  const h = (s) => s?.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c]);
 
-  async function loadApiKey() {
-    try {
-      const result = await api.storage.sync.get('vtApiKey');
-      if (result.vtApiKey) {
-        keyInput.value = result.vtApiKey;
-      }
-    } catch (err) {
-      console.error('[Tech Detector] Failed to load API key:', err.message);
-    }
-  }
-
-  function toggleApiKeyVisibility() {
-    const isPassword = keyInput.type === 'password';
-    keyInput.type = isPassword ? 'text' : 'password';
-    toggleBtn.textContent = isPassword ? '隠す' : '表示';
-  }
-
-  async function saveApiKey() {
-    const key = keyInput.value.trim();
-    try {
-      await api.storage.sync.set({ vtApiKey: key });
-      apiStatusEl.textContent = key ? 'APIキーを保存しました' : 'APIキーを削除しました';
-      apiStatusEl.className = 'status ok';
-      setTimeout(() => {
-        apiStatusEl.textContent = '';
-      }, 3000);
-    } catch (err) {
-      console.error('[Tech Detector] Failed to save API key:', err.message);
-      apiStatusEl.textContent = '保存に失敗しました';
-      apiStatusEl.className = 'status err';
-    }
-  }
-
-  // ─── Auto Detection ───
-
-  async function loadAutoDetectSetting() {
-    try {
-      const result = await api.storage.sync.get('autoDetect');
-      autoDetectCheckbox.checked = result.autoDetect === true;
-    } catch (err) {
-      console.error('[Tech Detector] Failed to load auto-detect setting:', err.message);
-    }
-  }
-
-  async function saveAutoDetectSetting() {
-    const enabled = autoDetectCheckbox.checked;
-    try {
-      await api.storage.sync.set({ autoDetect: enabled });
-      autoDetectStatusEl.textContent = enabled ? '自動検出を有効にしました' : '自動検出を無効にしました';
-      autoDetectStatusEl.className = 'status ok';
-      setTimeout(() => {
-        autoDetectStatusEl.textContent = '';
-      }, 3000);
-    } catch (err) {
-      console.error('[Tech Detector] Failed to save auto-detect setting:', err.message);
-      autoDetectStatusEl.textContent = '設定の保存に失敗しました';
-      autoDetectStatusEl.className = 'status err';
-    }
-  }
-
-  // ─── History Management ───
-
-  function formatDate(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'たった今';
-    if (diffMins < 60) return `${diffMins}分前`;
-    if (diffHours < 24) return `${diffHours}時間前`;
-    if (diffDays < 7) return `${diffDays}日前`;
-    return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
-  }
-
-  async function loadHistory() {
-    try {
-      const result = await api.storage.local.get('detection_history');
-      const history = result.detection_history || [];
-
-      if (history.length === 0) {
-        historyListEl.innerHTML = '<div class="empty-history">履歴がありません</div>';
-        return;
-      }
-
-      historyListEl.innerHTML = '';
-      for (const item of history) {
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.innerHTML = `
-          <div class="history-hostname">${escapeHtml(item.hostname)}</div>
-          <div class="history-meta">
-            ${item.detectionCount}件検出 · ${formatDate(item.timestamp)}
-          </div>
-        `;
-        historyListEl.appendChild(div);
-      }
-    } catch (err) {
-      console.error('[Tech Detector] Failed to load history:', err.message);
-      historyListEl.innerHTML = '<div class="empty-history">読み込みエラー</div>';
-    }
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  async function clearHistory() {
-    try {
-      await api.storage.local.remove('detection_history');
-      historyListEl.innerHTML = '<div class="empty-history">履歴を削除しました</div>';
-      setTimeout(() => {
-        historyListEl.innerHTML = '<div class="empty-history">履歴がありません</div>';
-      }, 2000);
-    } catch (err) {
-      console.error('[Tech Detector] Failed to clear history:', err.message);
-      alert('履歴の削除に失敗しました');
-    }
-  }
-
-  // ─── Cache Management ───
-
-  async function clearExpiredCache() {
-    try {
-      const response = await api.runtime.sendMessage({ type: 'CLEAR_CACHE' });
-      if (response && response.success) {
-        cacheStatusEl.textContent = '期限切れのキャッシュを削除しました';
-        cacheStatusEl.className = 'status ok';
-      } else {
-        cacheStatusEl.textContent = 'キャッシュの削除に失敗しました';
-        cacheStatusEl.className = 'status err';
-      }
-      setTimeout(() => {
-        cacheStatusEl.textContent = '';
-      }, 3000);
-    } catch (err) {
-      console.error('[Tech Detector] Failed to clear cache:', err.message);
-      cacheStatusEl.textContent = 'キャッシュの削除に失敗しました';
-      cacheStatusEl.className = 'status err';
-    }
-  }
-
-  // ─── Event Listeners ───
-
-  toggleBtn.addEventListener('click', toggleApiKeyVisibility);
-  saveApiBtn.addEventListener('click', saveApiKey);
-  autoDetectCheckbox.addEventListener('change', saveAutoDetectSetting);
-  clearHistoryBtn.addEventListener('click', clearHistory);
-  clearCacheBtn.addEventListener('click', clearExpiredCache);
-
-  // ─── Initialization ───
+  // === 初期化 ===
+  document.addEventListener('DOMContentLoaded', init);
 
   async function init() {
-    await Promise.all([
-      loadApiKey(),
-      loadAutoDetectSetting(),
-      loadHistory()
-    ]);
+    console.log('[Options] Initializing...');
+    
+    try {
+      // 設定読み込み
+      await loadSettings();
+      
+      // 履歴読み込み
+      await loadHistory();
+      
+      // イベントリスナー設定
+      setupEventListeners();
+      
+      console.log('[Options] Ready');
+    } catch (err) {
+      console.error('[Options] Init failed:', err);
+      showToast('初期化に失敗しました', 'error');
+    }
   }
 
-  init();
+  // === 設定管理 ===
+
+  async function loadSettings() {
+    const { vtApiKey, autoDetect } = await api.storage.sync.get(['vtApiKey', 'autoDetect']);
+    
+    if (vtApiKey) $('#vt-api-key').value = vtApiKey;
+    if (autoDetect !== undefined) $('#auto-detect').checked = autoDetect;
+    
+    console.log('[Options] Settings loaded');
+  }
+
+  async function saveSettings() {
+    const vtApiKey = $('#vt-api-key').value.trim();
+    const autoDetect = $('#auto-detect').checked;
+    
+    try {
+      await api.storage.sync.set({ vtApiKey, autoDetect });
+      showToast('設定を保存しました', 'success');
+    } catch (err) {
+      console.error('[Options] Save failed:', err);
+      showToast('保存に失敗しました', 'error');
+    }
+  }
+
+  // === 履歴管理 ===
+
+  async function loadHistory() {
+    const historyList = $('#history-list');
+    const historyStats = $('#history-stats');
+    const clearBtn = $('#clear-history');
+    
+    if (!historyList) {
+      console.warn('[Options] history-list element not found');
+      return;
+    }
+
+    try {
+      const result = await api.storage.local.get('detection_history');
+      historyData = result.detection_history || [];
+      
+      console.log('[Options] Loaded history:', historyData.length, 'items', historyData);
+
+      // 統計表示
+      if (historyStats) {
+        historyStats.innerHTML = `<span class="stat">🌐 ${historyData.length}サイト</span>`;
+      }
+
+      // クリアボタン有効化
+      if (clearBtn) {
+        clearBtn.disabled = historyData.length === 0;
+      }
+
+      // 履歴表示
+      renderHistory();
+      
+    } catch (err) {
+      console.error('[Options] Load history failed:', err);
+      if (historyList) {
+        historyList.innerHTML = `
+          <div class="error-state">
+            <p>読み込みに失敗しました</p>
+            <button class="btn" onclick="location.reload()">再読み込み</button>
+          </div>
+        `;
+      }
+    }
+  }
+
+  function renderHistory() {
+    const historyList = $('#history-list');
+    
+    if (!historyList) return;
+    
+    // データが配列でない場合は空配列に
+    if (!Array.isArray(historyData)) {
+      console.warn('[Options] historyData is not array:', historyData);
+      historyData = [];
+    }
+    
+    if (historyData.length === 0) {
+      historyList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <p>まだ履歴がありません</p>
+          <p class="empty-desc">ポップアップからサイトを検出すると、ここに表示されます</p>
+        </div>
+      `;
+      return;
+    }
+
+    historyList.innerHTML = historyData.map((item, index) => {
+      const hostname = item.hostname || 'unknown';
+      const score = typeof item.score === 'number' ? item.score : 0;
+      const detectionCount = typeof item.detectionCount === 'number' ? item.detectionCount : 0;
+      const timestamp = item.timestamp || Date.now();
+      
+      return `
+        <div class="history-item" data-index="${index}">
+          <div class="history-main">
+            <div class="history-host">
+              <span class="host-icon">🌐</span>
+              <span class="host-name">${h(hostname)}</span>
+            </div>
+            <div class="history-meta">
+              <span class="meta-time">${formatDate(timestamp)}</span>
+              <span class="meta-score ${getScoreClass(score)}">スコア${score}%</span>
+              <span class="meta-tech">${detectionCount}件検出</span>
+            </div>
+          </div>
+          <button class="delete-btn" data-index="${index}" title="削除">🗑️</button>
+        </div>
+      `;
+    }).join('');
+
+    // 削除ボタンのイベントリスナー
+    historyList.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.dataset.index, 10);
+        deleteHistoryItem(idx);
+      });
+    });
+  }
+
+  async function deleteHistoryItem(index) {
+    if (!confirm('この履歴を削除してもよろしいですか？')) return;
+    
+    try {
+      historyData.splice(index, 1);
+      await api.storage.local.set({ detection_history: historyData });
+      
+      renderHistory();
+      
+      // 統計更新
+      const historyStats = $('#history-stats');
+      if (historyStats) {
+        historyStats.innerHTML = `<span class="stat">🌐 ${historyData.length}サイト</span>`;
+      }
+      
+      // クリアボタン更新
+      const clearBtn = $('#clear-history');
+      if (clearBtn) {
+        clearBtn.disabled = historyData.length === 0;
+      }
+      
+      showToast('削除しました', 'success');
+    } catch (err) {
+      console.error('[Options] Delete failed:', err);
+      showToast('削除に失敗しました', 'error');
+    }
+  }
+
+  async function clearAllHistory() {
+    if (!confirm('すべての履歴を削除してもよろしいですか？\nこの操作は元に戻せません。')) {
+      return;
+    }
+
+    try {
+      await api.storage.local.remove('detection_history');
+      historyData = [];
+      
+      renderHistory();
+      
+      const historyStats = $('#history-stats');
+      if (historyStats) {
+        historyStats.innerHTML = `<span class="stat">🌐 0サイト</span>`;
+      }
+      
+      const clearBtn = $('#clear-history');
+      if (clearBtn) {
+        clearBtn.disabled = true;
+      }
+      
+      showToast('すべての履歴を削除しました', 'success');
+    } catch (err) {
+      console.error('[Options] Clear failed:', err);
+      showToast('削除に失敗しました', 'error');
+    }
+  }
+
+  // === イベントリスナー ===
+
+  function setupEventListeners() {
+    // 設定保存
+    $('#save-btn')?.addEventListener('click', saveSettings);
+    
+    // クリアボタン
+    $('#clear-history')?.addEventListener('click', clearAllHistory);
+    
+    // キャッシュクリア
+    $('#clear-cache')?.addEventListener('click', async () => {
+      try {
+        const { detection_cache } = await api.storage.local.get('detection_cache');
+        if (detection_cache) {
+          await api.storage.local.remove('detection_cache');
+        }
+        showToast('キャッシュをクリアしました', 'success');
+      } catch (err) {
+        console.error('[Options] Cache clear failed:', err);
+        showToast('クリアに失敗しました', 'error');
+      }
+    });
+    
+    // APIキーテスト
+    $('#test-vt')?.addEventListener('click', testVTApi);
+    
+    console.log('[Options] Event listeners attached');
+  }
+
+  async function testVTApi() {
+    const key = $('#vt-api-key').value.trim();
+    if (!key) {
+      showToast('APIキーを入力してください', 'error');
+      return;
+    }
+
+    const btn = $('#test-vt');
+    btn.textContent = 'テスト中...';
+    btn.disabled = true;
+
+    try {
+      // GoogleのURLでテスト
+      const url = 'https://www.google.com';
+      const id = btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      const resp = await fetch(`https://www.virustotal.com/api/v3/urls/${id}`, {
+        headers: { 'x-apikey': key },
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (resp.ok) {
+        showToast('APIキーは有効です', 'success');
+      } else if (resp.status === 401) {
+        showToast('APIキーが無効です', 'error');
+      } else {
+        showToast(`エラー: HTTP ${resp.status}`, 'error');
+      }
+    } catch (err) {
+      console.error('[Options] VT test failed:', err);
+      showToast('テストに失敗しました: ' + err.message, 'error');
+    } finally {
+      btn.textContent = '🔍 テスト';
+      btn.disabled = false;
+    }
+  }
+
+  // === ヘルパー ===
+
+  function formatDate(ts) {
+    if (!ts) return '-';
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = now - d;
+    
+    // 1時間以内
+    if (diff < 3600000) {
+      const mins = Math.floor(diff / 60000);
+      return mins < 1 ? 'たった今' : `${mins}分前`;
+    }
+    // 24時間以内
+    if (diff < 86400000) {
+      return `${Math.floor(diff / 3600000)}時間前`;
+    }
+    // 7日以内
+    if (diff < 604800000) {
+      return `${Math.floor(diff / 86400000)}日前`;
+    }
+    
+    return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+  }
+
+  function getScoreClass(score) {
+    if (score >= 80) return 'score-good';
+    if (score >= 50) return 'score-mid';
+    return 'score-bad';
+  }
+
+  function showToast(msg, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    
+    requestAnimationFrame(() => toast.classList.add('show'));
+    
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  console.log('[Options] Script loaded');
 })();

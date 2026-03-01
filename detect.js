@@ -1,5 +1,5 @@
 /**
- * detect.js — Pure detection engine for Tech Detector
+ * detect.js — Pure detection engine for Tech Detector_Enhanced
  * Provides functions to match technologies against page signals.
  */
 var TechDetector = (() => {
@@ -15,7 +15,7 @@ var TechDetector = (() => {
       const re = new RegExp(pattern, 'i');
       return re.exec(value);
     } catch (err) {
-      console.warn('[Tech Detector] Invalid regex pattern:', pattern, err.message);
+      console.warn('[Tech Detector_Enhanced] Invalid regex pattern:', pattern, err.message);
       return null;
     }
   }
@@ -58,7 +58,7 @@ var TechDetector = (() => {
             break;
           }
         } catch (err) {
-          console.warn('[Tech Detector] Invalid selector:', sel, err.message);
+          console.warn('[Tech Detector_Enhanced] Invalid selector:', sel, err.message);
         }
       }
     }

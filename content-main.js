@@ -96,7 +96,7 @@
         globals
       }, '*');
     } catch (err) {
-      console.error('[Tech Detector] Failed to probe globals:', err.message);
+      console.error('[Tech Detector_Enhanced] Failed to probe globals:', err.message);
     }
   }, 500);
 })();

@@ -1,5 +1,5 @@
 /**
- * background.js — Service Worker for Tech Detector.
+ * background.js — Service Worker for Tech Detector_Enhanced.
  * Handles: on-demand detection, header detection, content script injection,
  * badge updates, persistent caching, auto-detection, and history.
  */
@@ -36,7 +36,7 @@
       const resp = await fetch(url);
       technologies = await resp.json();
     } catch (e) {
-      console.error('[Tech Detector] Failed to load technologies.json:', e.message);
+      console.error('[Tech Detector_Enhanced] Failed to load technologies.json:', e.message);
     }
   }
 
@@ -49,7 +49,7 @@
         [key]: { ...data, timestamp: Date.now() }
       });
     } catch (e) {
-      console.warn('[Tech Detector] Failed to save to storage:', e.message);
+      console.warn('[Tech Detector_Enhanced] Failed to save to storage:', e.message);
     }
   }
 
@@ -64,7 +64,7 @@
       }
       return null;
     } catch (e) {
-      console.warn('[Tech Detector] Failed to load from storage:', e.message);
+      console.warn('[Tech Detector_Enhanced] Failed to load from storage:', e.message);
       return null;
     }
   }
@@ -84,10 +84,10 @@
       
       if (keysToRemove.length > 0) {
         await api.storage.local.remove(keysToRemove);
-        console.log(`[Tech Detector] Cleared ${keysToRemove.length} expired cache entries`);
+        console.log(`[Tech Detector_Enhanced] Cleared ${keysToRemove.length} expired cache entries`);
       }
     } catch (e) {
-      console.warn('[Tech Detector] Failed to clear expired cache:', e.message);
+      console.warn('[Tech Detector_Enhanced] Failed to clear expired cache:', e.message);
     }
   }
 
@@ -98,24 +98,33 @@
       const result = await api.storage.local.get(HISTORY_KEY);
       const history = result[HISTORY_KEY] || [];
       
-      // Avoid duplicates (same URL within last hour)
-      const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      const filtered = history.filter(h => 
-        !(h.url === data.url && h.timestamp > oneHourAgo)
-      );
+      const url = data.url;
+      let hostname;
+      try {
+        hostname = data.hostname || new URL(url).hostname;
+      } catch {
+        hostname = url;
+      }
       
+      // 同じホスト名のエントリを削除（常に最新のみ保持）
+      const filtered = history.filter(h => h.hostname !== hostname);
+      
+      // スコアは最低限の計算（詳細はポップアップ側で計算）
       filtered.unshift({
-        url: data.url,
-        hostname: new URL(data.url).hostname,
-        detectionCount: data.detections.length,
-        timestamp: Date.now()
+        hostname,
+        url,
+        timestamp: Date.now(),
+        detectionCount: data.detections?.length || 0,
+        score: data.score || 0
       });
       
       await api.storage.local.set({
         [HISTORY_KEY]: filtered.slice(0, MAX_HISTORY)
       });
+      
+      console.log('[Background] History saved:', hostname, filtered.length, 'items');
     } catch (e) {
-      console.warn('[Tech Detector] Failed to add to history:', e.message);
+      console.warn('[Tech Detector_Enhanced] Failed to add to history:', e.message);
     }
   }
 
@@ -150,7 +159,7 @@
             break;
           }
         } catch (e) {
-          console.warn('[Tech Detector] Invalid regex pattern:', pattern, e.message);
+          console.warn('[Tech Detector_Enhanced] Invalid regex pattern:', pattern, e.message);
         }
       }
     }
@@ -227,7 +236,7 @@
         );
       }
     } catch (e) {
-      console.warn('[Tech Detector] Header fetch failed:', e.message);
+      console.warn('[Tech Detector_Enhanced] Header fetch failed:', e.message);
     }
 
     // 2. Inject content scripts programmatically
@@ -242,7 +251,7 @@
         world: 'MAIN'
       });
     } catch (e) {
-      console.warn('[Tech Detector] Content script injection failed:', e.message);
+      console.warn('[Tech Detector_Enhanced] Content script injection failed:', e.message);
       updateBadge(tabId);
       return tabDetections[tabId];
     }
@@ -280,7 +289,7 @@
         // Small delay to let page stabilize
         setTimeout(() => {
           runDetection(tabId, tab.url).catch(e => 
-            console.warn('[Tech Detector] Auto-detection failed:', e.message)
+            console.warn('[Tech Detector_Enhanced] Auto-detection failed:', e.message)
           );
         }, 1000);
       }
@@ -324,7 +333,7 @@
       runDetection(message.tabId, message.url, message.skipCache)
         .then((result) => sendResponse(result))
         .catch((e) => {
-          console.error('[Tech Detector] Detection failed:', e.message);
+          console.error('[Tech Detector_Enhanced] Detection failed:', e.message);
           sendResponse({ url: message.url || '', detections: [] });
         });
       return true; // async sendResponse

@@ -1,475 +1,161 @@
 /**
- * popup.js — Sakura Theme UI for Tech Detector
- * No SSL Labs API - Browser APIs only
+ * Tech Detector Enhanced - Popup
+ * 整理版: シンプルで確実なデータフロー
  */
 (() => {
   'use strict';
-
   const api = typeof browser !== 'undefined' ? browser : chrome;
 
-  // ─── State ───
-  let currentData = null;
-  let currentTab = 'overview';
-  let searchTerm = '';
-  let filterCategory = 'all';
-
-  // ─── Simple Category Icons (emoji only) ───
-  const CATEGORY_ICONS = {
-    'js-framework': '⚛️',
-    'js-library': '📦',
-    'css-framework': '🎨',
-    'cms': '📝',
-    'server': '🖥️',
-    'analytics': '📊',
-    'cdn': '🌐',
-    'font': '🔤',
-    'hosting': '☁️',
-    'build': '🔧',
-    'security': '🔒',
-    'os': '💻'
+  // === 状態管理 ===
+  const state = {
+    data: null,
+    tab: 'overview',
+    search: '',
+    filter: 'all',
+    history: []
   };
 
-  const CATEGORY_LABELS = {
-    'js-framework': 'フレームワーク',
-    'js-library': 'ライブラリ',
-    'css-framework': 'CSS',
-    'cms': 'CMS',
-    'server': 'サーバー',
-    'analytics': '分析',
-    'cdn': 'CDN',
-    'font': 'フォント',
-    'hosting': 'ホスティング',
-    'build': 'ビルド',
-    'security': 'セキュリティ',
-    'os': 'OS'
+  // === 定数 ===
+  const ICONS = {
+    'js-framework': '⚛️', 'js-library': '📦', 'css-framework': '🎨',
+    'cms': '📝', 'server': '🖥️', 'analytics': '📊',
+    'cdn': '🌐', 'font': '🔤', 'hosting': '☁️',
+    'build': '🔧', 'security': '🔒', 'os': '💻'
   };
 
-  // ─── DOM Helpers ───
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => document.querySelectorAll(sel);
+  const LABELS = {
+    'js-framework': 'フレームワーク', 'js-library': 'ライブラリ',
+    'css-framework': 'CSS', 'cms': 'CMS', 'server': 'サーバー',
+    'analytics': 'アナリティクス', 'cdn': 'CDN', 'font': 'フォント',
+    'hosting': 'ホスティング', 'build': 'ビルド',
+    'security': 'セキュリティ', 'os': 'OS'
+  };
 
-  function createEl(tag, options = {}) {
-    const el = document.createElement(tag);
-    if (options.className) el.className = options.className;
-    if (options.textContent) el.textContent = options.textContent;
-    if (options.html) el.innerHTML = options.html;
-    return el;
-  }
+  // === DOM ヘルパー ===
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+  const h = (s) => s?.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c]);
 
-  // ─── Tab Management ───
-  function initTabs() {
-    $$('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        switchTab(tab);
-      });
-    });
-  }
-
-  function switchTab(tab) {
-    currentTab = tab;
-    $$('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
-    $$('.tab-content').forEach(content => content.classList.toggle('active', content.id === `tab-${tab}`));
-    if (tab === 'tech') renderTechTab();
-    else if (tab === 'security') renderSecurityTab();
-    else if (tab === 'details') renderDetailsTab();
-  }
-
-  // ─── Data Fetching ───
+  // === 初期化 ===
   async function init() {
     try {
+      // URLパラメータ取得
       const params = new URLSearchParams(location.search);
-      let tabId, tabUrl;
-      
-      if (params.has('tabId') && params.has('tabUrl')) {
-        tabId = Number(params.get('tabId'));
-        tabUrl = params.get('tabUrl');
-      } else {
-        const tabs = await api.tabs.query({ active: true, currentWindow: true });
-        if (!tabs[0]) return;
-        tabId = tabs[0].id;
-        tabUrl = tabs[0].url;
+      let tabId = params.has('tabId') ? Number(params.get('tabId')) : null;
+      let tabUrl = params.get('tabUrl');
+
+      // フォールバック: アクティブタブ
+      if (!tabId || !tabUrl) {
+        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+        if (!tab) return showError('タブ情報を取得できません');
+        tabId = tab.id;
+        tabUrl = tab.url;
       }
 
       const hostname = new URL(tabUrl).hostname;
       $('#hostname').textContent = hostname;
 
-      // Run all checks (no SSL Labs)
-      const [detection, encryption, headers, cookies, pageSec, dnsSec, dnsInfo, emailAuth, vtResult] = 
-        await Promise.allSettled([
-          api.runtime.sendMessage({ type: 'RUN_DETECTION', tabId, url: tabUrl }),
-          checkEncryption(tabId, tabUrl),
-          checkSecurityHeaders(tabUrl),
-          checkCookies(tabUrl),
-          checkPageSecurity(tabId),
-          checkDnsSecurity(tabUrl),
-          checkDnsInfo(tabUrl),
-          checkEmailAuth(tabUrl),
-          checkVirusTotal(tabUrl)
-        ]);
+      // 履歴読み込み
+      await loadHistory();
 
-      currentData = {
+      // データ収集（並列実行）
+      showLoading(true);
+      
+      const [
+        detection, encryption, headers, cookies, pageSec,
+        dnsInfo, emailAuth, vtResult, vitals, whois, ogp, links
+      ] = await Promise.all([
+        runDetection(tabId, tabUrl),
+        getEncryption(tabId, tabUrl),
+        getHeaders(tabUrl),
+        getCookies(tabUrl),
+        getPageSecurity(tabId),
+        getDnsInfo(tabUrl),
+        getEmailAuth(tabUrl),
+        getVirusTotal(tabUrl),
+        getWebVitals(tabId),
+        getWhois(hostname),
+        getOGP(tabId),
+        getLinks(tabId)
+      ]);
+
+      // 状態保存
+      state.data = {
         url: tabUrl,
         hostname,
-        detection: detection.status === 'fulfilled' ? detection.value : { detections: [] },
-        encryption: encryption.status === 'fulfilled' ? encryption.value : null,
-        headers: headers.status === 'fulfilled' ? headers.value : null,
-        cookies: cookies.status === 'fulfilled' ? cookies.value : null,
-        pageSecurity: pageSec.status === 'fulfilled' ? pageSec.value : null,
-        dnsSecurity: dnsSec.status === 'fulfilled' ? dnsSec.value : null,
-        dnsInfo: dnsInfo.status === 'fulfilled' ? dnsInfo.value : null,
-        emailAuth: emailAuth.status === 'fulfilled' ? emailAuth.value : null,
-        virusTotal: vtResult.status === 'fulfilled' ? vtResult.value : null,
-        timestamp: new Date()
+        detection,
+        encryption,
+        headers,
+        cookies,
+        pageSecurity: pageSec,
+        dnsInfo,
+        emailAuth,
+        virusTotal: vtResult,
+        vitals,
+        whois,
+        ogp,
+        links,
+        timestamp: Date.now()
       };
 
-      $('#loading').hidden = true;
-      renderOverview();
+      // 履歴保存
+      await saveHistory(state.data);
+
+      // UI更新
+      showLoading(false);
+      updateOverview();
       initTabs();
       initSearch();
       initExport();
+      
       $('#last-updated').textContent = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'});
+
     } catch (err) {
-      console.error('[Tech Detector] Init error:', err);
-      $('#loading').innerHTML = '<p style="color: #ffaaa5">読み込みに失敗しました</p>';
+      console.error('Init error:', err);
+      showError('読み込みに失敗しました: ' + err.message);
     }
   }
 
-  // ─── Overview Tab ───
-  function renderOverview() {
-    const data = currentData;
-    const detections = data.detection?.detections || [];
-    
-    $('#tech-count').textContent = `${detections.length}件`;
-    $('#stat-frameworks').textContent = countByCategory(detections, 'js-framework');
-    $('#stat-cms').textContent = countByCategory(detections, 'cms');
-    $('#stat-analytics').textContent = countByCategory(detections, 'analytics');
-    $('#stat-security').textContent = countByCategory(detections, 'security');
+  // === データ収集関数 ===
 
-    const score = calculateSecurityScore(data);
-    $('#security-score').textContent = score.grade;
-    $('#score-progress').style.width = `${score.percentage}%`;
-    $('#score-issues').textContent = score.issues > 0 
-      ? `${score.issues}個の改善ポイント` 
-      : '設定は良好です';
-
-    // Tech highlights
-    const highlights = $('#tech-highlights');
-    highlights.innerHTML = '';
-    const important = detections.filter(d => ['js-framework', 'cms', 'server'].includes(d.category)).slice(0, 8);
-    
-    if (important.length === 0) {
-      highlights.innerHTML = '<span class="empty-text">検出中...</span>';
-    } else {
-      important.forEach(tech => {
-        const chip = createEl('span', { className: 'tech-chip' });
-        chip.innerHTML = `${CATEGORY_ICONS[tech.category] || '•'} ${tech.name}${tech.version ? ` <span class="version">v${tech.version}</span>` : ''}`;
-        highlights.appendChild(chip);
-      });
-    }
-
-    // TLS
-    if (data.encryption) {
-      $('#tls-protocol').textContent = data.encryption.https ? 'HTTPS' : 'HTTP';
-      $('#tls-version').textContent = data.encryption.tlsVersion || '-';
-      $('#tls-grade').textContent = data.encryption.https ? '✓' : '✗';
-    }
-  }
-
-  function countByCategory(detections, category) {
-    return detections.filter(d => d.category === category).length;
-  }
-
-  function calculateSecurityScore(data) {
-    let score = 100;
-    let issues = 0;
-
-    if (!data.encryption?.https) { score -= 30; issues++; }
-    if (data.headers) {
-      ['csp', 'xContentTypeOptions', 'xFrameOptions'].forEach(h => {
-        if (!data.headers[h]) { score -= 5; issues++; }
-      });
-    }
-    if (!data.encryption?.hsts) { score -= 10; issues++; }
-    if (data.cookies?.total > 0) {
-      if (data.cookies.noSecure > 0) { score -= 5; issues++; }
-      if (data.cookies.noHttpOnly > 0) { score -= 5; issues++; }
-    }
-    if (data.pageSecurity?.mixedContent > 0) { score -= 15; issues++; }
-    if (data.virusTotal?.stats?.malicious > 0) { score -= 30; issues++; }
-
-    let grade = 'A';
-    if (score < 90) grade = 'B';
-    if (score < 70) grade = 'C';
-    if (score < 50) grade = 'D';
-    if (score < 30) grade = 'F';
-
-    return { grade, percentage: Math.max(0, score), issues };
-  }
-
-  // ─── Tech Tab ───
-  function initSearch() {
-    const searchInput = $('#tech-search');
-    const clearBtn = $('#clear-search');
-    
-    searchInput?.addEventListener('input', (e) => {
-      searchTerm = e.target.value.toLowerCase();
-      clearBtn.hidden = !searchTerm;
-      renderTechTab();
-    });
-
-    clearBtn?.addEventListener('click', () => {
-      searchTerm = '';
-      searchInput.value = '';
-      clearBtn.hidden = true;
-      renderTechTab();
-    });
-
-    $$('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        filterCategory = btn.dataset.filter;
-        $$('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        renderTechTab();
-      });
-    });
-  }
-
-  function renderTechTab() {
-    const list = $('#tech-list');
-    const detections = currentData?.detection?.detections || [];
-    
-    let filtered = detections;
-    if (filterCategory !== 'all') filtered = filtered.filter(d => d.category === filterCategory);
-    if (searchTerm) filtered = filtered.filter(d => d.name.toLowerCase().includes(searchTerm));
-
-    if (filtered.length === 0) {
-      list.innerHTML = `<div class="empty-state"><p>${searchTerm ? '見つかりません' : '検出されませんでした'}</p></div>`;
-      return;
-    }
-
-    const groups = {};
-    filtered.forEach(d => {
-      if (!groups[d.category]) groups[d.category] = [];
-      groups[d.category].push(d);
-    });
-
-    list.innerHTML = '';
-    Object.entries(groups).forEach(([category, items]) => {
-      const categoryEl = createEl('div', { className: 'tech-category' });
-      const header = createEl('div', { 
-        className: 'category-header-row',
-        html: `<span class="category-name">${CATEGORY_ICONS[category] || '•'} ${CATEGORY_LABELS[category] || category}</span><span class="category-badge">${items.length}</span>`
-      });
-      
-      const itemsContainer = createEl('div', { className: 'tech-items' });
-      items.forEach(tech => {
-        const row = createEl('div', { className: 'tech-row' });
-        row.innerHTML = `
-          <span class="tech-icon-sm">${CATEGORY_ICONS[tech.category] || '•'}</span>
-          <span class="tech-name-sm">${tech.name}</span>
-          ${tech.version ? `<span class="tech-version-sm">v${tech.version}</span>` : ''}
-        `;
-        itemsContainer.appendChild(row);
-      });
-
-      header.addEventListener('click', () => itemsContainer.hidden = !itemsContainer.hidden);
-      categoryEl.appendChild(header);
-      categoryEl.appendChild(itemsContainer);
-      list.appendChild(categoryEl);
-    });
-  }
-
-  // ─── Security Tab ───
-  function renderSecurityTab() {
-    const data = currentData;
-    
-    // Headers
-    const headersList = $('#headers-list');
-    if (data.headers) {
-      const checks = [
-        { key: 'csp', label: 'Content Security Policy' },
-        { key: 'xContentTypeOptions', label: 'X-Content-Type-Options' },
-        { key: 'xFrameOptions', label: 'X-Frame-Options' },
-        { key: 'hsts', label: 'HSTS', value: data.encryption?.hsts },
-        { key: 'referrerPolicy', label: 'Referrer-Policy' }
-      ];
-      
-      let passCount = 0;
-      headersList.innerHTML = checks.map(check => {
-        const value = check.value !== undefined ? check.value : data.headers[check.key];
-        const pass = !!value;
-        if (pass) passCount++;
-        return `<div class="check-item">
-          <span class="check-icon ${pass ? 'pass' : 'fail'}">${pass ? '✓' : '✗'}</span>
-          <div class="check-content">
-            <div class="check-label">${check.label}</div>
-            ${value ? `<div class="check-value">${value.substring(0, 40)}${value.length > 40 ? '...' : ''}</div>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-
-      const scoreBadge = $('#headers-score');
-      const percentage = Math.round((passCount / checks.length) * 100);
-      scoreBadge.textContent = `${percentage}%`;
-      scoreBadge.className = `badge ${percentage >= 80 ? 'badge-success' : percentage >= 50 ? 'badge-warning' : 'badge-danger'}`;
-    }
-
-    // Cookies
-    const cookieSummary = $('#cookie-summary');
-    if (data.cookies && data.cookies.total > 0) {
-      cookieSummary.innerHTML = `
-        <div class="summary-item"><span class="summary-label">合計</span><span class="summary-value">${data.cookies.total}個</span></div>
-        <div class="summary-item"><span class="summary-label">Secureなし</span><span class="summary-value" style="color: ${data.cookies.noSecure > 0 ? '#ffaaa5' : '#a8e6cf'}">${data.cookies.noSecure}個</span></div>
-        <div class="summary-item"><span class="summary-label">HttpOnlyなし</span><span class="summary-value" style="color: ${data.cookies.noHttpOnly > 0 ? '#ffaaa5' : '#a8e6cf'}">${data.cookies.noHttpOnly}個</span></div>
-      `;
-    } else {
-      cookieSummary.innerHTML = '<div class="summary-item"><span class="summary-label">Cookieは設定されていません</span></div>';
-    }
-
-    // Page Security
-    const pageList = $('#page-security-list');
-    if (data.pageSecurity) {
-      const issues = [];
-      if (data.pageSecurity.mixedContent > 0) issues.push({ label: 'Mixed Content', value: data.pageSecurity.mixedContent });
-      if (data.pageSecurity.noSri > 0) issues.push({ label: 'SRI未設定', value: data.pageSecurity.noSri });
-      if (data.pageSecurity.unsafeLinks > 0) issues.push({ label: 'noopener未設定', value: data.pageSecurity.unsafeLinks });
-      
-      pageList.innerHTML = issues.length > 0 
-        ? issues.map(i => `<div class="check-item"><span class="check-icon warn">!</span><div class="check-content"><div class="check-label">${i.label}</div><div class="check-value">${i.value}件</div></div></div>`).join('')
-        : '<div class="check-item"><span class="check-icon pass">✓</span><div class="check-content"><div class="check-label">問題は見つかりませんでした</div></div></div>';
-    }
-  }
-
-  // ─── Details Tab ───
-  function renderDetailsTab() {
-    const data = currentData;
-    
-    // DNS
-    const dnsDetails = $('#dns-details');
-    if (data.dnsInfo) {
-      dnsDetails.innerHTML = `
-        <div class="detail-item"><span class="detail-label">IPアドレス</span><span class="detail-value">${data.dnsInfo.ips?.join(', ') || '-'}</span></div>
-        <div class="detail-item"><span class="detail-label">ネームサーバー</span><span class="detail-value">${data.dnsInfo.ns?.join(', ') || '-'}</span></div>
-        <div class="detail-item"><span class="detail-label">逆引き</span><span class="detail-value">${data.dnsInfo.ptr || 'なし'}</span></div>
-      `;
-    }
-
-    // Certificate (simplified - browser limitation)
-    const certDetails = $('#cert-details');
-    if (data.encryption?.https) {
-      certDetails.innerHTML = `
-        <div class="detail-item"><span class="detail-label">プロトコル</span><span class="detail-value">HTTPS</span></div>
-        <div class="detail-item"><span class="detail-label">TLSバージョン</span><span class="detail-value">${data.encryption.tlsVersion || '不明'}</span></div>
-        <div class="detail-item"><span class="detail-label">HTTPバージョン</span><span class="detail-value">${data.encryption.httpVersion || '不明'}</span></div>
-        <div class="detail-item"><span class="detail-label">HSTS</span><span class="detail-value">${data.encryption.hsts ? '有効' : 'なし'}</span></div>
-      `;
-    } else {
-      certDetails.innerHTML = '<div class="detail-item"><span class="detail-value">HTTP接続のため証明書情報はありません</span></div>';
-    }
-
-    // Email Auth
-    const emailDetails = $('#email-auth-details');
-    if (data.emailAuth) {
-      emailDetails.innerHTML = ['spf', 'dmarc'].map(key => {
-        const value = data.emailAuth[key];
-        const pass = !!value;
-        return `<div class="check-item"><span class="check-icon ${pass ? 'pass' : 'fail'}">${pass ? '✓' : '✗'}</span><div class="check-content"><div class="check-label">${key.toUpperCase()}</div><div class="check-value">${pass ? '設定済み' : '未設定'}</div></div></div>`;
-      }).join('');
-    }
-
-    // VirusTotal
-    const vtDetails = $('#vt-details');
-    const vtBadge = $('#vt-badge');
-    if (data.virusTotal) {
-      if (data.virusTotal.noKey) {
-        vtDetails.innerHTML = '<div class="detail-item"><span class="detail-value">APIキー未設定</span></div>';
-        vtBadge.hidden = true;
-      } else if (data.virusTotal.stats) {
-        const stats = data.virusTotal.stats;
-        const malicious = stats.malicious || 0;
-        const suspicious = stats.suspicious || 0;
-        vtBadge.hidden = false;
-        vtBadge.textContent = malicious > 0 ? '危険' : suspicious > 0 ? '注意' : '安全';
-        vtBadge.className = `badge ${malicious > 0 ? 'badge-danger' : suspicious > 0 ? 'badge-warning' : 'badge-success'}`;
-        vtDetails.innerHTML = `<div class="detail-item"><span class="detail-label">検出結果</span><span class="detail-value">悪意: ${malicious} / 疑わしい: ${suspicious}</span></div>`;
-      }
-    } else {
-      vtBadge.hidden = true;
-    }
-  }
-
-  // ─── Export ───
-  function initExport() {
-    const modal = $('#export-modal');
-    
-    $('#export-btn')?.addEventListener('click', () => modal.hidden = false);
-    $('.modal-close')?.addEventListener('click', () => modal.hidden = true);
-    modal?.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
-    $('#export-json')?.addEventListener('click', () => { exportToJSON(); modal.hidden = true; });
-    $('#export-csv')?.addEventListener('click', () => { exportToCSV(); modal.hidden = true; });
-    $('#settings-btn')?.addEventListener('click', () => api.runtime.openOptionsPage());
-    $('#refresh-btn')?.addEventListener('click', () => location.reload());
-  }
-
-  function exportToJSON() {
-    if (!currentData) return;
-    const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = createEl('a');
-    a.href = url;
-    a.download = `tech-detector-${currentData.hostname}-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportToCSV() {
-    if (!currentData?.detection?.detections) return;
-    const headers = ['Name', 'Category', 'Version'];
-    const rows = currentData.detection.detections.map(d => [d.name, CATEGORY_LABELS[d.category] || d.category, d.version || '']);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = createEl('a');
-    a.href = url;
-    a.download = `tech-detector-${currentData.hostname}-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // ─── Check Functions (No SSL Labs) ───
-  async function checkEncryption(tabId, url) {
-    const isHttps = url.startsWith('https://');
-    if (!isHttps) return { https: false };
-
-    const result = { https: true };
+  async function runDetection(tabId, url) {
     try {
-      const [proto, headResp] = await Promise.allSettled([
-        api.scripting.executeScript({
-          target: { tabId },
-          func: () => {
-            const e = performance.getEntriesByType('navigation');
-            return e[0]?.nextHopProtocol || '';
-          }
-        }),
-        fetch(url, { method: 'HEAD' }).catch(() => null)
-      ]);
-
-      if (proto.status === 'fulfilled') {
-        const p = proto.value[0]?.result;
-        result.httpVersion = { 'h2': 'HTTP/2', 'h3': 'HTTP/3', 'http/1.1': 'HTTP/1.1' }[p] || p;
-        if (p === 'h3') result.tlsVersion = 'TLS 1.3';
-        else if (p === 'h2') result.tlsVersion = 'TLS 1.2+';
-        else result.tlsVersion = 'TLS 1.x';
-      }
-      if (headResp.status === 'fulfilled' && headResp.value) {
-        result.hsts = headResp.value.headers.get('strict-transport-security');
-      }
-    } catch (e) {}
-    return result;
+      return await api.runtime.sendMessage({ type: 'RUN_DETECTION', tabId, url });
+    } catch {
+      return { detections: [] };
+    }
   }
 
-  async function checkSecurityHeaders(url) {
+  async function getEncryption(tabId, url) {
+    if (!url.startsWith('https://')) return { https: false };
+    
+    try {
+      const [{ result: proto }] = await api.scripting.executeScript({
+        target: { tabId },
+        func: () => performance.getEntriesByType('navigation')[0]?.nextHopProtocol
+      });
+
+      const result = { https: true, protocol: proto };
+      
+      if (proto === 'h3') result.tlsVersion = 'TLS 1.3';
+      else if (proto === 'h2') result.tlsVersion = 'TLS 1.2';
+      else if (proto === 'http/1.1') result.tlsVersion = 'TLS 1.0-1.2';
+      
+      result.httpVersion = { h2: 'HTTP/2', h3: 'HTTP/3', 'http/1.1': 'HTTP/1.1' }[proto] || proto;
+
+      // HSTS取得
+      try {
+        const resp = await fetch(url, { method: 'HEAD' });
+        result.hsts = resp.headers.get('strict-transport-security');
+      } catch {}
+
+      return result;
+    } catch {
+      return { https: true };
+    }
+  }
+
+  async function getHeaders(url) {
     try {
       const resp = await fetch(url, { method: 'HEAD' });
       return {
@@ -481,25 +167,27 @@
         permissionsPolicy: resp.headers.get('permissions-policy'),
         hsts: resp.headers.get('strict-transport-security')
       };
-    } catch { return null; }
+    } catch {
+      return {};
+    }
   }
 
-  async function checkCookies(url) {
+  async function getCookies(url) {
     try {
       const cookies = await api.cookies.getAll({ url });
-      if (cookies.length === 0) return { total: 0 };
       return {
         total: cookies.length,
         noSecure: cookies.filter(c => !c.secure).length,
-        noHttpOnly: cookies.filter(c => !c.httpOnly).length,
-        noSameSite: cookies.filter(c => !c.sameSite || c.sameSite === 'unspecified').length
+        noHttpOnly: cookies.filter(c => !c.httpOnly).length
       };
-    } catch { return null; }
+    } catch {
+      return { total: 0 };
+    }
   }
 
-  async function checkPageSecurity(tabId) {
+  async function getPageSecurity(tabId) {
     try {
-      const [result] = await api.scripting.executeScript({
+      const [{ result }] = await api.scripting.executeScript({
         target: { tabId },
         func: () => {
           const isHttps = location.protocol === 'https:';
@@ -513,11 +201,10 @@
           }
           
           document.querySelectorAll('script[src],link[rel="stylesheet"][href]').forEach(el => {
-            if (el.src || el.href) {
-              try {
-                if (new URL(el.src || el.href).hostname !== location.hostname && !el.integrity) noSri++;
-              } catch {}
-            }
+            try {
+              const u = new URL(el.src || el.href, location.href);
+              if (u.hostname !== location.hostname && !el.integrity) noSri++;
+            } catch {}
           });
 
           document.querySelectorAll('a[target="_blank"]').forEach(a => {
@@ -527,80 +214,673 @@
           return { mixedContent: mixed, noSri, unsafeLinks };
         }
       });
-      return result?.result;
-    } catch { return null; }
+      return result;
+    } catch {
+      return {};
+    }
   }
 
-  async function checkDnsSecurity(url) {
-    try {
-      const domain = new URL(url).hostname.replace(/^www\./, '');
-      const [dns, caa] = await Promise.allSettled([
-        fetch(`https://dns.google/resolve?name=${domain}&type=A`).then(r => r.json()),
-        fetch(`https://dns.google/resolve?name=${domain}&type=CAA`).then(r => r.json())
-      ]);
-      return {
-        dnssec: dns.status === 'fulfilled' && dns.value.AD === true,
-        caa: caa.status === 'fulfilled' ? (caa.value.Answer || []).filter(a => a.type === 257).length : 0
-      };
-    } catch { return null; }
-  }
-
-  async function checkDnsInfo(url) {
+  async function getDnsInfo(url) {
     try {
       const hostname = new URL(url).hostname;
       const domain = hostname.replace(/^www\./, '');
-      const [a, ns] = await Promise.allSettled([
+      
+      const [aResp, nsResp] = await Promise.all([
         fetch(`https://dns.google/resolve?name=${hostname}&type=A`).then(r => r.json()),
         fetch(`https://dns.google/resolve?name=${domain}&type=NS`).then(r => r.json())
       ]);
 
-      const ips = a.status === 'fulfilled' ? (a.value.Answer || []).filter(x => x.type === 1).map(x => x.data) : [];
-      const nsList = ns.status === 'fulfilled' ? (ns.value.Answer || []).filter(x => x.type === 2).map(x => x.data.replace(/\.$/, '')) : [];
+      const ips = aResp.Answer?.filter(r => r.type === 1).map(r => r.data) || [];
+      const ns = nsResp.Answer?.filter(r => r.type === 2).map(r => r.data.replace(/\.$/, '')) || [];
 
-      // PTR lookup
+      // PTR（逆引き）
       let ptr = null;
-      if (ips.length > 0) {
+      if (ips[0]) {
         try {
           const reversed = ips[0].split('.').reverse().join('.');
           const ptrResp = await fetch(`https://dns.google/resolve?name=${reversed}.in-addr.arpa&type=PTR`);
           const ptrData = await ptrResp.json();
-          if (ptrData.Answer?.length > 0) ptr = ptrData.Answer[0].data.replace(/\.$/, '');
+          ptr = ptrData.Answer?.[0]?.data.replace(/\.$/, '');
         } catch {}
       }
 
-      return { ips, ns: nsList, ptr };
-    } catch { return null; }
+      return { ips, ns, ptr };
+    } catch {
+      return { ips: [], ns: [], ptr: null };
+    }
   }
 
-  async function checkEmailAuth(url) {
+  async function getEmailAuth(url) {
     try {
       const domain = new URL(url).hostname.replace(/^www\./, '');
-      const [spf, dmarc] = await Promise.allSettled([
+      const [spfResp, dmarcResp] = await Promise.all([
         fetch(`https://dns.google/resolve?name=${domain}&type=TXT`).then(r => r.json()),
         fetch(`https://dns.google/resolve?name=_dmarc.${domain}&type=TXT`).then(r => r.json())
       ]);
-      return {
-        spf: spf.status === 'fulfilled' ? (spf.value.Answer || []).find(a => a.data?.includes('v=spf1'))?.data : null,
-        dmarc: dmarc.status === 'fulfilled' ? (dmarc.value.Answer || []).find(a => a.data?.toUpperCase().includes('V=DMARC1'))?.data : null
-      };
-    } catch { return null; }
+
+      const spf = spfResp.Answer?.find(r => r.data?.includes('v=spf1'))?.data;
+      const dmarc = dmarcResp.Answer?.find(r => r.data?.toUpperCase().includes('V=DMARC1'))?.data;
+
+      return { spf, dmarc };
+    } catch {
+      return {};
+    }
   }
 
-  async function checkVirusTotal(url) {
+  async function getVirusTotal(url) {
     try {
       const { vtApiKey } = await api.storage.sync.get('vtApiKey');
       if (!vtApiKey) return { noKey: true };
+      
       const id = btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const resp = await fetch(`https://www.virustotal.com/api/v3/urls/${id}`, {
         headers: { 'x-apikey': vtApiKey },
         signal: AbortSignal.timeout(8000)
       });
+      
       if (!resp.ok) return { error: true };
       const json = await resp.json();
       return { stats: json.data.attributes.last_analysis_stats };
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
-  // ─── Start ───
+  async function getWebVitals(tabId) {
+    try {
+      const [{ result }] = await api.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const nav = performance.getEntriesByType('navigation')[0];
+          return {
+            lcp: nav?.loadEventEnd ? nav.loadEventEnd - nav.startTime : null,
+            ttfb: nav?.responseStart ? nav.responseStart - nav.startTime : null,
+            pageSize: nav?.transferSize,
+            requests: performance.getEntriesByType('resource').length,
+            domElements: document.getElementsByTagName('*').length
+          };
+        }
+      });
+      return result;
+    } catch {
+      return {};
+    }
+  }
+
+  async function getWhois(hostname) {
+    // まずIPを取得
+    let ip = null;
+    try {
+      const dnsResp = await fetch(`https://dns.google/resolve?name=${hostname}&type=A`);
+      const dnsData = await dnsResp.json();
+      ip = dnsData.Answer?.find(r => r.type === 1)?.data;
+    } catch {}
+
+    if (!ip) return { ip: null };
+
+    // ipinfo.ioでIP情報を取得
+    try {
+      const resp = await fetch(`https://ipinfo.io/${ip}/json`, {
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!resp.ok) return { ip };
+      
+      const data = await resp.json();
+
+      return {
+        ip,
+        country: data.country,
+        region: data.region,
+        city: data.city,
+        isp: data.org,
+        org: data.org,
+        asn: data.asn?.asn
+      };
+    } catch (err) {
+      console.warn('[Whois] Failed:', err);
+      return { ip };
+    }
+  }
+
+  async function getOGP(tabId) {
+    try {
+      const [{ result }] = await api.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const getMeta = (name) => {
+            const el = document.querySelector(`meta[property="og:${name}"],meta[name="${name}"],meta[name="twitter:${name}"]`);
+            return el?.content;
+          };
+          
+          const favicon = document.querySelector('link[rel~="icon"]')?.href;
+          
+          return {
+            title: getMeta('title') || document.title,
+            description: getMeta('description') || '',
+            image: getMeta('image'),
+            favicon: favicon || '/favicon.ico'
+          };
+        }
+      });
+      return result;
+    } catch {
+      return {};
+    }
+  }
+
+  async function getLinks(tabId) {
+    try {
+      const [{ result }] = await api.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const links = document.querySelectorAll('a[href]');
+          const ownHost = location.hostname;
+          let external = 0, internal = 0;
+          
+          links.forEach(a => {
+            try {
+              const url = new URL(a.href);
+              if (url.hostname === ownHost || url.hostname.endsWith('.' + ownHost)) internal++;
+              else external++;
+            } catch {}
+          });
+          
+          return { total: links.length, external, internal };
+        }
+      });
+      return result;
+    } catch {
+      return { total: 0, external: 0, internal: 0 };
+    }
+  }
+
+  // === 履歴管理 ===
+
+  async function loadHistory() {
+    try {
+      const { detection_history } = await api.storage.local.get('detection_history');
+      state.history = detection_history || [];
+    } catch {
+      state.history = [];
+    }
+  }
+
+  async function saveHistory(data) {
+    try {
+      // 現在の履歴を取得
+      const { detection_history = [] } = await api.storage.local.get('detection_history');
+      
+      // 同じホスト名の古いエントリを削除
+      const filtered = detection_history.filter(h => h.hostname !== data.hostname);
+      
+      // スコア計算
+      const score = calcScore(data).percent;
+      
+      // 新しいエントリを追加
+      filtered.unshift({
+        hostname: data.hostname,
+        url: data.url,
+        timestamp: Date.now(),
+        detectionCount: data.detection?.detections?.length || 0,
+        score: score
+      });
+      
+      // 最大20件に制限
+      state.history = filtered.slice(0, 20);
+      
+      await api.storage.local.set({ detection_history: state.history });
+      console.log('[Popup] History saved:', data.hostname, 'score:', score);
+    } catch (err) {
+      console.error('History save failed:', err);
+    }
+  }
+
+  // === UI更新 ===
+
+  function updateOverview() {
+    const d = state.data;
+    const detections = d.detection?.detections || [];
+    
+    // カウント
+    $('#tech-count').textContent = detections.length + '件';
+    $('#stat-frameworks').textContent = detections.filter(x => x.category === 'js-framework').length;
+    $('#stat-cms').textContent = detections.filter(x => x.category === 'cms').length;
+    $('#stat-analytics').textContent = detections.filter(x => x.category === 'analytics').length;
+    $('#stat-security').textContent = detections.filter(x => x.category === 'security').length;
+
+    // スコア
+    const score = calcScore(d);
+    $('#security-score').textContent = score.grade;
+    $('#score-progress').style.width = score.percent + '%';
+    $('#score-issues').textContent = score.issues > 0 
+      ? score.issues + '個の改善が推奨されます'
+      : 'セキュリティ設定は良好です';
+
+    // 技術ハイライト
+    const highlights = $('#tech-highlights');
+    const important = detections.filter(x => ['js-framework', 'cms', 'server'].includes(x.category)).slice(0, 8);
+    
+    if (important.length === 0) {
+      highlights.innerHTML = '<span class="empty-text">技術を検出中...</span>';
+    } else {
+      highlights.innerHTML = important.map(t => 
+        `<span class="tech-chip">${ICONS[t.category] || '•'} ${h(t.name)}${t.version ? ` <span class="version">v${h(t.version)}</span>` : ''}</span>`
+      ).join('');
+    }
+
+    // TLS
+    if (d.encryption) {
+      $('#tls-protocol').textContent = d.encryption.https ? 'HTTPS対応' : 'HTTP';
+      $('#tls-version').textContent = d.encryption.tlsVersion || '不明';
+      $('#tls-grade').textContent = d.encryption.httpVersion || '-';
+    }
+
+    // Vitalsプレビュー
+    if (d.vitals) {
+      $('#vitals-preview').innerHTML = `
+        <div class="summary-item">
+          <span class="summary-label">LCP</span>
+          <span class="summary-value">${d.vitals.lcp ? Math.round(d.vitals.lcp) + 'ms' : '-'}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">CLS</span>
+          <span class="summary-value">${d.vitals.cls?.toFixed(3) || '-'}</span>
+        </div>
+      `;
+    }
+  }
+
+  function calcScore(d) {
+    let score = 100, issues = 0;
+    
+    if (!d.encryption?.https) { score -= 30; issues++; }
+    if (!d.headers?.csp) { score -= 5; issues++; }
+    if (!d.headers?.xContentTypeOptions) { score -= 5; issues++; }
+    if (!d.headers?.xFrameOptions) { score -= 5; issues++; }
+    if (!d.encryption?.hsts) { score -= 10; issues++; }
+    if (d.cookies?.noSecure > 0) { score -= 5; issues++; }
+    if (d.cookies?.noHttpOnly > 0) { score -= 5; issues++; }
+    if (d.pageSecurity?.mixedContent > 0) { score -= 15; issues++; }
+    if (d.virusTotal?.stats?.malicious > 0) { score -= 30; issues++; }
+
+    let grade = 'A';
+    if (score < 90) grade = 'B';
+    if (score < 70) grade = 'C';
+    if (score < 50) grade = 'D';
+    if (score < 30) grade = 'F';
+    
+    return { grade, percent: Math.max(0, score), issues };
+  }
+
+  // === タブ管理 ===
+
+  function initTabs() {
+    $$('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.tab = btn.dataset.tab;
+        $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+        $$('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + state.tab));
+        
+        if (state.tab === 'tech') renderTechTab();
+        else if (state.tab === 'security') renderSecurityTab();
+        else if (state.tab === 'details') renderDetailsTab();
+        else if (state.tab === 'performance') renderPerformanceTab();
+        else if (state.tab === 'history') renderHistoryTab();
+      });
+    });
+  }
+
+  function renderTechTab() {
+    const list = $('#tech-list');
+    const detections = state.data.detection?.detections || [];
+    
+    let filtered = detections;
+    if (state.filter !== 'all') filtered = filtered.filter(x => x.category === state.filter);
+    if (state.search) filtered = filtered.filter(x => x.name.toLowerCase().includes(state.search));
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state"><p>${state.search ? '見つかりませんでした' : '検出された技術はありません'}</p></div>`;
+      return;
+    }
+
+    // カテゴリでグループ化
+    const groups = {};
+    filtered.forEach(d => {
+      if (!groups[d.category]) groups[d.category] = [];
+      groups[d.category].push(d);
+    });
+
+    list.innerHTML = Object.entries(groups).map(([cat, items]) => `
+      <div class="tech-category">
+        <div class="category-header-row" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden">
+          <span class="category-name">${ICONS[cat] || '•'} ${h(LABELS[cat] || cat)}</span>
+          <span class="category-badge">${items.length}件</span>
+        </div>
+        <div class="tech-items">
+          ${items.map(t => `
+            <div class="tech-row">
+              <span class="tech-icon-sm">${ICONS[t.category] || '•'}</span>
+              <span class="tech-name-sm">${h(t.name)}</span>
+              ${t.version ? `<span class="tech-version-sm">v${h(t.version)}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderSecurityTab() {
+    const d = state.data;
+    
+    // ヘッダー
+    const checks = [
+      { key: 'csp', label: 'Content Security Policy' },
+      { key: 'xContentTypeOptions', label: 'X-Content-Type-Options' },
+      { key: 'xFrameOptions', label: 'X-Frame-Options' },
+      { key: 'hsts', label: 'HSTS', val: d.encryption?.hsts },
+      { key: 'referrerPolicy', label: 'Referrer-Policy' }
+    ];
+    
+    let passed = 0;
+    $('#headers-list').innerHTML = checks.map(c => {
+      const val = c.val !== undefined ? c.val : d.headers?.[c.key];
+      const ok = !!val;
+      if (ok) passed++;
+      return `<div class="check-item">
+        <span class="check-icon ${ok ? 'pass' : 'fail'}">${ok ? '✓' : '✗'}</span>
+        <div class="check-content">
+          <div class="check-label">${c.label}</div>
+          ${val ? `<div class="check-value">${h(val.substring(0, 40))}${val.length > 40 ? '...' : ''}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    const pct = Math.round((passed / checks.length) * 100);
+    const badge = $('#headers-score');
+    badge.textContent = pct + '%';
+    badge.className = 'badge ' + (pct >= 80 ? 'badge-success' : pct >= 50 ? 'badge-warning' : 'badge-danger');
+
+    // Cookie
+    if (d.cookies?.total > 0) {
+      $('#cookie-summary').innerHTML = `
+        <div class="summary-item"><span class="summary-label">合計</span><span class="summary-value">${d.cookies.total}個</span></div>
+        <div class="summary-item"><span class="summary-label">Secure属性なし</span><span class="summary-value" style="color:${d.cookies.noSecure>0?'#ffaaa5':'#a8e6cf'}">${d.cookies.noSecure}個</span></div>
+        <div class="summary-item"><span class="summary-label">HttpOnly属性なし</span><span class="summary-value" style="color:${d.cookies.noHttpOnly>0?'#ffaaa5':'#a8e6cf'}">${d.cookies.noHttpOnly}個</span></div>
+      `;
+    } else {
+      $('#cookie-summary').innerHTML = '<div class="summary-item"><span class="summary-label">Cookieは設定されていません</span></div>';
+    }
+
+    // ページ診断
+    const issues = [];
+    if (d.pageSecurity?.mixedContent > 0) issues.push({ label: 'Mixed Content', val: d.pageSecurity.mixedContent });
+    if (d.pageSecurity?.noSri > 0) issues.push({ label: 'SRI未設定', val: d.pageSecurity.noSri });
+    if (d.pageSecurity?.unsafeLinks > 0) issues.push({ label: 'noopener未設定', val: d.pageSecurity.unsafeLinks });
+    
+    $('#page-security-list').innerHTML = issues.length > 0
+      ? issues.map(i => `<div class="check-item"><span class="check-icon warn">!</span><div class="check-content"><div class="check-label">${i.label}</div><div class="check-value">${i.val}件検出</div></div></div>`).join('')
+      : '<div class="check-item"><span class="check-icon pass">✓</span><div class="check-content"><div class="check-label">重大な問題は検出されませんでした</div></div></div>';
+  }
+
+  function renderDetailsTab() {
+    const d = state.data;
+    
+    // OGP
+    if (d.ogp?.title) {
+      $('#ogp-preview').innerHTML = `
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          ${d.ogp.image ? `<img src="${h(d.ogp.image)}" style="width:60px;height:60px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">` : ''}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(d.ogp.title)}</div>
+            <div style="font-size:11px;color:var(--text-muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${h(d.ogp.description)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // DNS
+    $('#dns-details').innerHTML = `
+      <div class="detail-item"><span class="detail-label">IPアドレス</span><span class="detail-value">${d.dnsInfo?.ips?.join(', ') || '取得できません'}</span></div>
+      <div class="detail-item"><span class="detail-label">ネームサーバー</span><span class="detail-value">${d.dnsInfo?.ns?.join(', ') || '取得できません'}</span></div>
+      <div class="detail-item"><span class="detail-label">逆引き（PTR）</span><span class="detail-value">${d.dnsInfo?.ptr || '設定されていません'}</span></div>
+    `;
+
+    // Whois
+    if (d.whois?.ip) {
+      $('#whois-details').innerHTML = `
+        <div class="detail-item"><span class="detail-label">IPアドレス</span><span class="detail-value">${h(d.whois.ip)}</span></div>
+        <div class="detail-item"><span class="detail-label">国</span><span class="detail-value">${d.whois.country || '不明'}</span></div>
+        <div class="detail-item"><span class="detail-label">地域</span><span class="detail-value">${d.whois.region || '不明'}</span></div>
+        <div class="detail-item"><span class="detail-label">都市</span><span class="detail-value">${d.whois.city || '不明'}</span></div>
+        <div class="detail-item"><span class="detail-label">ISP/組織</span><span class="detail-value">${d.whois.org || '取得できません'}</span></div>
+      `;
+    } else {
+      $('#whois-details').innerHTML = '<div class="detail-item"><span class="detail-value">ドメイン情報を取得できませんでした</span></div>';
+    }
+
+    // 証明書
+    if (d.encryption?.https) {
+      $('#cert-details').innerHTML = `
+        <div class="detail-item"><span class="detail-label">プロトコル</span><span class="detail-value">HTTPS（暗号化通信）</span></div>
+        <div class="detail-item"><span class="detail-label">TLSバージョン</span><span class="detail-value">${d.encryption.tlsVersion || '不明'}</span></div>
+        <div class="detail-item"><span class="detail-label">HTTPバージョン</span><span class="detail-value">${d.encryption.httpVersion || '不明'}</span></div>
+        <div class="detail-item"><span class="detail-label">HSTS</span><span class="detail-value">${d.encryption.hsts ? '有効' : '無効'}</span></div>
+      `;
+    } else {
+      $('#cert-details').innerHTML = '<div class="detail-item"><span class="detail-value">HTTP接続のため、証明書情報はありません</span></div>';
+    }
+
+    // メール認証
+    $('#email-auth-details').innerHTML = ['spf', 'dmarc'].map(k => {
+      const ok = !!d.emailAuth?.[k];
+      return `<div class="check-item"><span class="check-icon ${ok ? 'pass' : 'fail'}">${ok ? '✓' : '✗'}</span><div class="check-content"><div class="check-label">${k.toUpperCase()}</div><div class="check-value">${ok ? '設定済み' : '未設定'}</div></div></div>`;
+    }).join('');
+
+    // VirusTotal
+    const vtBadge = $('#vt-badge');
+    if (d.virusTotal?.noKey) {
+      $('#vt-details').innerHTML = '<div class="detail-item"><span class="detail-value">設定画面でAPIキーを設定してください</span></div>';
+      vtBadge.hidden = true;
+    } else if (d.virusTotal?.stats) {
+      const s = d.virusTotal.stats;
+      const bad = (s.malicious || 0) + (s.suspicious || 0);
+      vtBadge.hidden = false;
+      vtBadge.textContent = bad > 0 ? '危険' : '安全';
+      vtBadge.className = 'badge ' + (bad > 0 ? 'badge-danger' : 'badge-success');
+      $('#vt-details').innerHTML = `<div class="detail-item"><span class="detail-label">検出結果</span><span class="detail-value">悪意:${s.malicious||0}/疑わしい:${s.suspicious||0}/安全:${s.harmless||0}</span></div>`;
+    } else {
+      vtBadge.hidden = true;
+    }
+
+    // リンク統計
+    $('#links-details').innerHTML = `
+      <div class="summary-item"><span class="summary-label">総リンク数</span><span class="summary-value">${d.links?.total || 0}個</span></div>
+      <div class="summary-item"><span class="summary-label">外部リンク</span><span class="summary-value">${d.links?.external || 0}個</span></div>
+      <div class="summary-item"><span class="summary-label">内部リンク</span><span class="summary-value">${d.links?.internal || 0}個</span></div>
+    `;
+  }
+
+  function renderPerformanceTab() {
+    const v = state.data.vitals;
+    $('#performance-content').innerHTML = `
+      <div class="card">
+        <h3 class="section-title">Core Web Vitals</h3>
+        <div class="vitals-grid">
+          <div class="vital-card">
+            <span class="vital-name">LCP</span>
+            <span class="vital-value">${v?.lcp ? Math.round(v.lcp) + 'ms' : '-'}</span>
+            <span class="vital-desc">最大コンテンツ表示時間</span>
+          </div>
+          <div class="vital-card">
+            <span class="vital-name">TTFB</span>
+            <span class="vital-value">${v?.ttfb ? Math.round(v.ttfb) + 'ms' : '-'}</span>
+            <span class="vital-desc">サーバー応答時間</span>
+          </div>
+          <div class="vital-card">
+            <span class="vital-name">ページサイズ</span>
+            <span class="vital-value">${v?.pageSize ? (v.pageSize / 1024 / 1024).toFixed(2) + 'MB' : '-'}</span>
+            <span class="vital-desc">転送サイズ</span>
+          </div>
+          <div class="vital-card">
+            <span class="vital-name">DOM要素</span>
+            <span class="vital-value">${v?.domElements || '-'}</span>
+            <span class="vital-desc">要素数</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderHistoryTab() {
+    const prev = state.history.find(h => h.hostname === state.data.hostname && h.timestamp < Date.now() - 60000);
+    
+    if (!prev) {
+      $('#history-content').innerHTML = '<div class="empty-state">まだ過去のスキャンデータがありません。次回アクセス時に比較表示されます。</div>';
+      return;
+    }
+
+    const currScore = calcScore(state.data).percent;
+    const scoreDiff = currScore - prev.score;
+    const techDiff = (state.data.detection?.detections?.length || 0) - prev.detectionCount;
+
+    $('#history-content').innerHTML = `
+      <div class="card">
+        <h3 class="section-title">前回 (${new Date(prev.timestamp).toLocaleDateString('ja-JP')}) との比較</h3>
+        <div class="comparison-grid">
+          <div class="comp-item">
+            <span class="comp-label">セキュリティスコア</span>
+            <span class="comp-value" style="color:${scoreDiff>=0?'#a8e6cf':'#ffaaa5'}">${scoreDiff >= 0 ? '↑' : '↓'} ${Math.abs(scoreDiff)}%</span>
+          </div>
+          <div class="comp-item">
+            <span class="comp-label">検出技術数</span>
+            <span class="comp-value" style="color:${techDiff>=0?'#a8e6cf':'#ffaaa5'}">${techDiff >= 0 ? '↑' : '↓'} ${Math.abs(techDiff)}個</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">スキャン履歴 (${state.history.length}件)</h3>
+        <div class="history-list">
+          ${state.history.slice(0, 10).map(h => `
+            <div class="history-item">
+              <span class="history-host">${h(h.hostname)}</span>
+              <span class="history-meta">${new Date(h.timestamp).toLocaleDateString('ja-JP')} · スコア${h.score}% · ${h.detectionCount}件</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // === 検索・フィルター ===
+
+  function initSearch() {
+    const input = $('#tech-search');
+    const clear = $('#clear-search');
+    
+    input?.addEventListener('input', (e) => {
+      state.search = e.target.value.toLowerCase();
+      clear.hidden = !state.search;
+      if (state.tab === 'tech') renderTechTab();
+    });
+
+    clear?.addEventListener('click', () => {
+      state.search = '';
+      input.value = '';
+      clear.hidden = true;
+      if (state.tab === 'tech') renderTechTab();
+    });
+
+    $$('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.filter = btn.dataset.filter;
+        $$('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (state.tab === 'tech') renderTechTab();
+      });
+    });
+  }
+
+  // === エクスポート ===
+
+  function initExport() {
+    const modal = $('#export-modal');
+    
+    $('#export-btn')?.addEventListener('click', () => modal.hidden = false);
+    $('.modal-close')?.addEventListener('click', () => modal.hidden = true);
+    modal?.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
+    
+    $('#export-json')?.addEventListener('click', () => { exportJSON(); modal.hidden = true; });
+    $('#export-csv')?.addEventListener('click', () => { exportCSV(); modal.hidden = true; });
+    $('#export-report')?.addEventListener('click', () => { exportReport(); modal.hidden = true; });
+    $('#settings-btn')?.addEventListener('click', () => api.runtime.openOptionsPage());
+    $('#refresh-btn')?.addEventListener('click', () => location.reload());
+  }
+
+  function exportJSON() {
+    if (!state.data) return;
+    const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tech-detector-${state.data.hostname}-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportCSV() {
+    if (!state.data?.detection?.detections) return;
+    const rows = state.data.detection.detections.map(d => [d.name, LABELS[d.category] || d.category, d.version || '']);
+    const csv = [['Name', 'Category', 'Version'], ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tech-detector-${state.data.hostname}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportReport() {
+    if (!state.data) return;
+    const s = calcScore(state.data);
+    const report = `# Tech Detector Enhanced セキュリティレポート
+
+## サイト情報
+- **URL**: ${state.data.url}
+- **ホスト名**: ${state.data.hostname}
+- **検出日時**: ${new Date().toLocaleString('ja-JP')}
+- **セキュリティスコア**: ${s.grade} (${s.percent}%)
+
+## 検出技術 (${state.data.detection?.detections?.length || 0}件)
+${state.data.detection?.detections?.map(d => `- ${d.name} ${d.version || ''} (${LABELS[d.category] || d.category})`).join('\n') || 'なし'}
+
+## Web Vitals
+- **LCP**: ${state.data.vitals?.lcp ? Math.round(state.data.vitals.lcp) + 'ms' : 'N/A'}
+- **TTFB**: ${state.data.vitals?.ttfb ? Math.round(state.data.vitals.ttfb) + 'ms' : 'N/A'}
+
+---
+Generated by Tech Detector Enhanced
+`;
+    const blob = new Blob([report], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report-${state.data.hostname}-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // === UI ヘルパー ===
+
+  function showLoading(show) {
+    $('#loading').hidden = !show;
+  }
+
+  function showError(msg) {
+    showLoading(false);
+    $('#loading').innerHTML = `<p style="color:#ffaaa5;padding:20px">${h(msg)}</p>`;
+  }
+
+  // === 開始 ===
   init();
 })();
