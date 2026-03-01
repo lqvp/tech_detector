@@ -141,7 +141,7 @@
     try {
       await api.scripting.executeScript({
         target: { tabId },
-        files: ['lib/browser-polyfill.js', 'detect.js', 'content.js']
+        files: ['browser-polyfill.js', 'detect.js', 'content.js']
       });
       await api.scripting.executeScript({
         target: { tabId },
