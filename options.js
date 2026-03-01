@@ -1,35 +1,29 @@
 /**
  * Tech Detector Enhanced - Options Page
- * 整理版: シンプルで確実なデータフロー
+ * 設定画面のUI制御
+ * @requires utils.js
  */
+
 (() => {
   'use strict';
-  const api = typeof browser !== 'undefined' ? browser : chrome;
 
   // === 状態管理 ===
   let historyData = [];
 
-  // === DOM ヘルパー ===
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => document.querySelectorAll(s);
-  const h = (s) => s?.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c]);
-
   // === 初期化 ===
   document.addEventListener('DOMContentLoaded', init);
 
+  /**
+   * 設定画面初期化
+   */
   async function init() {
     console.log('[Options] Initializing...');
-    
+
     try {
-      // 設定読み込み
       await loadSettings();
-      
-      // 履歴読み込み
       await loadHistory();
-      
-      // イベントリスナー設定
       setupEventListeners();
-      
+
       console.log('[Options] Ready');
     } catch (err) {
       console.error('[Options] Init failed:', err);
@@ -39,21 +33,33 @@
 
   // === 設定管理 ===
 
+  /**
+   * 設定を読み込み
+   */
   async function loadSettings() {
-    const { vtApiKey, autoDetect } = await api.storage.sync.get(['vtApiKey', 'autoDetect']);
-    
-    if (vtApiKey) $('#vt-api-key').value = vtApiKey;
-    if (autoDetect !== undefined) $('#auto-detect').checked = autoDetect;
-    
+    const { vtApiKey, autoDetect } = await syncGet(['vtApiKey', 'autoDetect']);
+
+    const keyInput = $('#vt-api-key');
+    const autoCheck = $('#auto-detect');
+
+    if (keyInput && vtApiKey) keyInput.value = vtApiKey;
+    if (autoCheck && autoDetect !== undefined) autoCheck.checked = autoDetect;
+
     console.log('[Options] Settings loaded');
   }
 
+  /**
+   * 設定を保存
+   */
   async function saveSettings() {
-    const vtApiKey = $('#vt-api-key').value.trim();
-    const autoDetect = $('#auto-detect').checked;
-    
+    const keyInput = $('#vt-api-key');
+    const autoCheck = $('#auto-detect');
+
+    const vtApiKey = keyInput?.value?.trim() || '';
+    const autoDetect = autoCheck?.checked ?? false;
+
     try {
-      await api.storage.sync.set({ vtApiKey, autoDetect });
+      await syncSet({ vtApiKey, autoDetect });
       showToast('設定を保存しました', 'success');
     } catch (err) {
       console.error('[Options] Save failed:', err);
@@ -63,21 +69,18 @@
 
   // === 履歴管理 ===
 
+  /**
+   * 履歴を読み込み
+   */
   async function loadHistory() {
     const historyList = $('#history-list');
     const historyStats = $('#history-stats');
     const clearBtn = $('#clear-history');
-    
-    if (!historyList) {
-      console.warn('[Options] history-list element not found');
-      return;
-    }
 
     try {
-      const result = await api.storage.local.get('detection_history');
+      const result = await storageGet('detection_history');
       historyData = result.detection_history || [];
-      
-      console.log('[Options] Loaded history:', historyData.length, 'items', historyData);
+      console.log('[Options] Loaded history:', historyData.length, 'items');
 
       // 統計表示
       if (historyStats) {
@@ -89,33 +92,35 @@
         clearBtn.disabled = historyData.length === 0;
       }
 
-      // 履歴表示
       renderHistory();
-      
+
     } catch (err) {
       console.error('[Options] Load history failed:', err);
       if (historyList) {
         historyList.innerHTML = `
           <div class="error-state">
             <p>読み込みに失敗しました</p>
-            <button class="btn" onclick="location.reload()">再読み込み</button>
+            <button class="btn" id="reload-btn">再読み込み</button>
           </div>
         `;
+        $('#reload-btn')?.addEventListener('click', () => location.reload());
       }
     }
   }
 
+  /**
+   * 履歴リストを描画
+   */
   function renderHistory() {
     const historyList = $('#history-list');
-    
     if (!historyList) return;
-    
+
     // データが配列でない場合は空配列に
     if (!Array.isArray(historyData)) {
       console.warn('[Options] historyData is not array:', historyData);
       historyData = [];
     }
-    
+
     if (historyData.length === 0) {
       historyList.innerHTML = `
         <div class="empty-state">
@@ -132,7 +137,7 @@
       const score = typeof item.score === 'number' ? item.score : 0;
       const detectionCount = typeof item.detectionCount === 'number' ? item.detectionCount : 0;
       const timestamp = item.timestamp || Date.now();
-      
+
       return `
         <div class="history-item" data-index="${index}">
           <div class="history-main">
@@ -141,126 +146,156 @@
               <span class="host-name">${h(hostname)}</span>
             </div>
             <div class="history-meta">
-              <span class="meta-time">${formatDate(timestamp)}</span>
+              <span class="meta-time">${formatRelativeTime(timestamp)}</span>
               <span class="meta-score ${getScoreClass(score)}">スコア${score}%</span>
               <span class="meta-tech">${detectionCount}件検出</span>
             </div>
           </div>
-          <button class="delete-btn" data-index="${index}" title="削除">🗑️</button>
+          <button class="delete-btn" data-index="${index}" data-action="delete" title="削除">🗑️</button>
         </div>
       `;
     }).join('');
-
-    // 削除ボタンのイベントリスナー
-    historyList.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.currentTarget.dataset.index, 10);
-        deleteHistoryItem(idx);
-      });
-    });
+    
+    console.log('[Options] Rendered', historyData.length, 'history items');
   }
 
-  async function deleteHistoryItem(index) {
+  /**
+   * 履歴項目削除ハンドラ
+   * @param {number} index
+   */
+  async function handleDeleteItem(index) {
+    console.log('[Options] Delete requested for index:', index);
     if (!confirm('この履歴を削除してもよろしいですか？')) return;
-    
+
     try {
-      historyData.splice(index, 1);
-      await api.storage.local.set({ detection_history: historyData });
-      
+      const newHistory = [...historyData];
+      newHistory.splice(index, 1);
+      await storageSet({ detection_history: newHistory });
+      historyData = newHistory;
       renderHistory();
-      
-      // 統計更新
-      const historyStats = $('#history-stats');
-      if (historyStats) {
-        historyStats.innerHTML = `<span class="stat">🌐 ${historyData.length}サイト</span>`;
-      }
-      
-      // クリアボタン更新
-      const clearBtn = $('#clear-history');
-      if (clearBtn) {
-        clearBtn.disabled = historyData.length === 0;
-      }
-      
+      updateHistoryStats();
       showToast('削除しました', 'success');
     } catch (err) {
       console.error('[Options] Delete failed:', err);
-      showToast('削除に失敗しました', 'error');
+      showToast('削除に失敗しました: ' + err.message, 'error');
     }
   }
 
-  async function clearAllHistory() {
+  /**
+   * 履歴全削除ハンドラ
+   */
+  async function handleClearAll() {
+    console.log('[Options] Clear all requested');
     if (!confirm('すべての履歴を削除してもよろしいですか？\nこの操作は元に戻せません。')) {
       return;
     }
 
     try {
-      await api.storage.local.remove('detection_history');
+      console.log('[Options] Calling clearAllHistory...');
+      await storageRemove('detection_history');
       historyData = [];
-      
       renderHistory();
-      
-      const historyStats = $('#history-stats');
-      if (historyStats) {
-        historyStats.innerHTML = `<span class="stat">🌐 0サイト</span>`;
-      }
-      
-      const clearBtn = $('#clear-history');
-      if (clearBtn) {
-        clearBtn.disabled = true;
-      }
-      
+      updateHistoryStats();
       showToast('すべての履歴を削除しました', 'success');
     } catch (err) {
       console.error('[Options] Clear failed:', err);
-      showToast('削除に失敗しました', 'error');
+      showToast('削除に失敗しました: ' + err.message, 'error');
+    }
+  }
+
+  /**
+   * 履歴統計表示を更新
+   */
+  function updateHistoryStats() {
+    const historyStats = $('#history-stats');
+    const clearBtn = $('#clear-history');
+
+    if (historyStats) {
+      historyStats.innerHTML = `<span class="stat">🌐 ${historyData.length}サイト</span>`;
+    }
+    if (clearBtn) {
+      clearBtn.disabled = historyData.length === 0;
     }
   }
 
   // === イベントリスナー ===
 
+  /**
+   * イベントリスナーを設定
+   */
   function setupEventListeners() {
     // 設定保存
     $('#save-btn')?.addEventListener('click', saveSettings);
-    
-    // クリアボタン
-    $('#clear-history')?.addEventListener('click', clearAllHistory);
-    
+
+    // 履歴全削除
+    const clearBtn = $('#clear-history');
+    if (clearBtn) {
+      console.log('[Options] Attaching clear-all listener');
+      clearBtn.addEventListener('click', handleClearAll);
+    } else {
+      console.warn('[Options] Clear button not found');
+    }
+
     // キャッシュクリア
-    $('#clear-cache')?.addEventListener('click', async () => {
-      try {
-        const { detection_cache } = await api.storage.local.get('detection_cache');
-        if (detection_cache) {
-          await api.storage.local.remove('detection_cache');
-        }
-        showToast('キャッシュをクリアしました', 'success');
-      } catch (err) {
-        console.error('[Options] Cache clear failed:', err);
-        showToast('クリアに失敗しました', 'error');
-      }
-    });
-    
+    $('#clear-cache')?.addEventListener('click', handleClearCache);
+
     // APIキーテスト
     $('#test-vt')?.addEventListener('click', testVTApi);
     
+    // 履歴リストのイベント委譲（削除ボタン）
+    const historyList = $('#history-list');
+    if (historyList) {
+      historyList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.delete-btn');
+        if (btn) {
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.index, 10);
+          console.log('[Options] Delete button clicked for index:', idx);
+          handleDeleteItem(idx);
+        }
+      });
+    }
+
     console.log('[Options] Event listeners attached');
   }
 
+  /**
+   * キャッシュクリアハンドラ
+   */
+  async function handleClearCache() {
+    try {
+      await storageRemove('detection_cache');
+      showToast('キャッシュをクリアしました', 'success');
+    } catch (err) {
+      console.error('[Options] Cache clear failed:', err);
+      showToast('クリアに失敗しました', 'error');
+    }
+  }
+
+  /**
+   * VirusTotal APIテスト
+   */
   async function testVTApi() {
-    const key = $('#vt-api-key').value.trim();
+    const keyInput = $('#vt-api-key');
+    const key = keyInput?.value?.trim();
+
     if (!key) {
       showToast('APIキーを入力してください', 'error');
       return;
     }
 
     const btn = $('#test-vt');
-    btn.textContent = 'テスト中...';
-    btn.disabled = true;
+    const originalText = btn?.textContent;
+
+    if (btn) {
+      btn.textContent = 'テスト中...';
+      btn.disabled = true;
+    }
 
     try {
-      // GoogleのURLでテスト
       const url = 'https://www.google.com';
       const id = btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      
+
       const resp = await fetch(`https://www.virustotal.com/api/v3/urls/${id}`, {
         headers: { 'x-apikey': key },
         signal: AbortSignal.timeout(10000)
@@ -277,50 +312,31 @@
       console.error('[Options] VT test failed:', err);
       showToast('テストに失敗しました: ' + err.message, 'error');
     } finally {
-      btn.textContent = '🔍 テスト';
-      btn.disabled = false;
+      if (btn) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
     }
   }
 
-  // === ヘルパー ===
+  // === Toast通知 ===
 
-  function formatDate(ts) {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    const now = new Date();
-    const diff = now - d;
-    
-    // 1時間以内
-    if (diff < 3600000) {
-      const mins = Math.floor(diff / 60000);
-      return mins < 1 ? 'たった今' : `${mins}分前`;
-    }
-    // 24時間以内
-    if (diff < 86400000) {
-      return `${Math.floor(diff / 3600000)}時間前`;
-    }
-    // 7日以内
-    if (diff < 604800000) {
-      return `${Math.floor(diff / 86400000)}日前`;
-    }
-    
-    return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
-  }
-
-  function getScoreClass(score) {
-    if (score >= 80) return 'score-good';
-    if (score >= 50) return 'score-mid';
-    return 'score-bad';
-  }
-
+  /**
+   * Toast通知を表示
+   * @param {string} msg
+   * @param {'info'|'success'|'error'} type
+   */
   function showToast(msg, type = 'info') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = msg;
     document.body.appendChild(toast);
-    
+
     requestAnimationFrame(() => toast.classList.add('show'));
-    
+
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
